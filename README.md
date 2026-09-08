@@ -1,5 +1,7 @@
 # Декодер азбуки Морзе из аудио 🎵→📝
 
+**Русский** | [English](README.en.md)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4.svg)](https://github.com/tixset/MorseDecoder)
 [![Language](https://img.shields.io/badge/Language-Python%203.9+-3776ab.svg)](https://www.python.org/)

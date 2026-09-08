@@ -6,6 +6,8 @@ labels: enhancement
 assignees: ''
 ---
 
+**Русский** | [English](feature_request.en.md)
+
 ## Описание функции
 Краткое и понятное описание того, что вы хотите добавить.
 

@@ -1,5 +1,7 @@
 # Pull Request
 
+**Русский** | [English](PULL_REQUEST_TEMPLATE.en.md)
+
 ## Описание изменений
 Краткое описание того, что делает этот PR.
 
