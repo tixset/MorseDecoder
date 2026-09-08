@@ -1,12 +1,12 @@
 ---
-name: Bug report
+name: Ошибка (Русский)
 about: Сообщить об ошибке в работе декодера
 title: '[BUG] '
 labels: bug
 assignees: ''
 ---
 
-**Русский** | [English](bug_report.en.md)
+[![Русский](https://img.shields.io/badge/Language-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-blue)](bug_report.md) [![English](https://img.shields.io/badge/Language-English-lightgrey)](bug_report.en.md)
 
 ## Описание проблемы
 Краткое и понятное описание ошибки.

@@ -6,7 +6,7 @@ labels: enhancement
 assignees: ''
 ---
 
-[Русский](feature_request.md) | **English**
+[![Русский](https://img.shields.io/badge/Language-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-lightgrey)](feature_request.md) [![English](https://img.shields.io/badge/Language-English-blue)](feature_request.en.md)
 
 ## Feature Description
 

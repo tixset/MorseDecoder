@@ -1,380 +1,302 @@
-# Morse Code Audio Decoder 🎵→📝
+# Audio Morse Decoder 🎵→📝
 
-[Русский](README.md) | **English**
+[![Русский](https://img.shields.io/badge/Language-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-lightgrey)](README.md) [![English](https://img.shields.io/badge/Language-English-blue)](README.en.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4.svg)](https://github.com/tixset/MorseDecoder)
-[![Language](https://img.shields.io/badge/Language-Python%203.9+-3776ab.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/tixset/MorseDecoder/releases)
-[![Status](https://img.shields.io/badge/Status-Active-success.svg)](https://github.com/tixset/MorseDecoder)
+[![Python](https://img.shields.io/badge/Language-Python-3776ab.svg)](https://www.python.org/)
+[![Release](https://img.shields.io/github/v/release/tixset/MorseDecoder)](https://github.com/tixset/MorseDecoder/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.en.md)
-
 [![GitHub Stars](https://img.shields.io/github/stars/tixset/MorseDecoder?style=social)](https://github.com/tixset/MorseDecoder/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/tixset/MorseDecoder?style=social)](https://github.com/tixset/MorseDecoder/network/members)
 [![GitHub Issues](https://img.shields.io/github/issues/tixset/MorseDecoder)](https://github.com/tixset/MorseDecoder/issues)
 [![Last Commit](https://img.shields.io/github/last-commit/tixset/MorseDecoder)](https://github.com/tixset/MorseDecoder/commits)
 
-A tool for decoding Morse code from radio audio recordings, with procedural commands, code detection, and configurable processing parameters.
+An audio Morse decoder with English and Russian alphabets, automatic parameter tuning, and procedural code analysis. Includes a CLI and a GUI for manual tuning.
 
-## 🆕 Update of January 7, 2026
+## ✨ Main features
 
-- ⚡ **Performance improvements**
-  - LRU caching for fuzzy matching (reported speedup: 3–5×).
-  - Asynchronous callsign lookup with aiohttp (reported speedup: 13×, from 12 s to 0.92 s).
-  - Numba JIT compilation of Levenshtein distance (326k operations/s).
-- 🏗️ **Code organization**
-  - Added [modules/code_dictionaries.py](modules/code_dictionaries.py) as a central store for code dictionaries.
-  - Reduced [modules/procedural_codes.py](modules/procedural_codes.py) from 1,080 to 752 lines at that release, a 30% reduction.
-  - Removed duplicated constants between modules.
-- 📚 **Code inventory** — checked all 18 dictionaries:
-  - Q codes (53), Z codes (33), Y codes (26), and Russian Shch codes (3).
-  - CW abbreviations (25), prosigns (11), and maritime codes (18).
-  - Weather codes (9), Soviet codes (12), and SINPO parameters (5).
-  - All codes were successfully recognized by the detector.
+### 🎚️ Audio and tuning
 
-These figures describe the January 2026 release. Current noise processing and result interpretation are described below.
+- ✅ CW decoding from radio and WebSDR recordings: WAV, MP3, OGG.
+- ✅ Pulse extraction in noise, automatic carrier detection, and WPM estimation.
+- ✅ Text rendered in both Russian and English alphabets.
+- ✅ Pulse, dot/dash, character-gap, and word-gap thresholds adjustable through the Python API and slider GUI.
+- ✅ Automatic tuning: `fast` (12 combinations), `thorough` (560), `extreme` (3696).
+- ✅ Batch processing with multiple threads, reusable JSON configurations, and temporary WAV cleanup.
+- ✅ Experimental processing of multiple frequency bands and random parameter search.
 
-## 🎯 Main Features in 2026
+### 📡 Procedural codes and messages
 
-- ⭐ **Unified CLI** ([morse_cli.py](morse_cli.py)): one entry point for all operations.
-- 📁 **Modular structure**: processing code in `modules/`.
-- 🧪 **Test runner** ([run_all_tests.py](run_all_tests.py)): runs the project's test suites.
-- 📡 **Callsign lookup** (`--lookup`): lookup using four API sources.
-- 🎨 **Detailed TXT reports**: eight sections with decoding information.
-- ⚡ **Fast mode** (`--mode fast`): a small search over parameter combinations.
-- 🔬 **Experimental mode**: search for suitable decoding parameters.
-- 📊 **Detailed guides**:
-  - [CLI usage guide](docs/USAGE_GUIDE.en.md).
-  - [Supported codes](docs/SUPPORTED_CODES.en.md), including the historical 280+ code inventory.
-  - [Multi-signal decoding](docs/MULTI_SIGNAL_DECODING.en.md).
+The decoded-text detector supports Q, Z, Y, and Shch codes, CW abbreviations, Russian procedural abbreviations, tagged prosigns, maritime codes, and weather codes. It also extracts `CHECK` and `NR`, finds callsign candidates, and identifies message-structure and urgency indicators. The API exposes more categories than the console summary lists.
 
-**Historical experiment result:** in 40 tests on real WebSDR recordings, the earlier decoder did not detect Q/Z codes. The original report attributed this to interference. Only simple Russian procedural codes `Р` (6 occurrences) and `ДЕ` (2 occurrences) were found. This is not a benchmark of the current noise-processing implementation.
+Exact matching is the default; fuzzy matching can be enabled through the API. The prosign `<AR>` and separate letters `AR` are not equivalent: joined transmission matters.
 
-## ✨ Features
+### 📊 Reports and performance
 
-### Basic Functionality
+The tuning TXT report contains recording information, both transcriptions, detected codes and callsigns, technical parameters, and signal analysis. JSON saves parameters and heuristic metrics; `multi` also saves results by band. The CLI has no CSV export.
 
-- Processing of noisy audio recordings.
-- Automatic estimation of sending speed; the timing model searches 2–100 WPM, but successful decoding across that entire range is not guaranteed.
-- English and Russian decoding.
-- Interference filtering; current automatic processing isolates a narrow band around the detected carrier. Fixed-band processing is also available.
-- Batch processing with parallel workers.
-- WAV, MP3, and OGG input, with FFmpeg conversion for compressed audio.
+The implementation includes decoding and fuzzy-matching caches, Numba acceleration for Levenshtein distance, and a separate asynchronous callsign module using aiohttp. Having an asynchronous module does not mean every CLI command uses it. Actual speedups depend on data, caching, networking, and hardware.
 
-### Procedural Codes and Radiograms
+## 🔧 Installation
 
-- **Q codes**, including QRZ, QTH, and QSL.
-- **Z codes**, including Soviet procedural commands.
-- **Prosigns**, including AR, SK, BT, K, and HH.
-- Extraction of **CHECK** and **NR** message fields.
-- Radiogram structure analysis.
-- Callsign candidate detection.
-- Message priority detection.
-
-### Features Added in 2026
-
-- 🎚️ **GUI sliders** for adjusting parameters interactively.
-- 📊 **JSON/CSV export** for examining results, as described in the original feature inventory.
-- ⚙️ **Configurable thresholds** without editing source code.
-- ⚡ **Parallel file processing**, with reported historical speedups of 3–4×.
-- 🧹 **Automatic cleanup** of temporary WAV files.
-- 📈 **WPM statistics** (words per minute).
-- 🛡️ **Improved error handling** with detailed messages.
-- 📡 **Callsign Lookup System**:
-  - Four API sources: HamQTH, RadioQTH, QRZ.RU, and APRS.fi.
-  - Automatic transliteration of Cyrillic callsigns.
-  - Seven-day result caching.
-  - Batch lookup with delays between requests.
-
-## 🚀 Quick Start
-
-### Unified CLI
+Run commands from the repository root. Use Python 3.10 or newer; the full test suite was checked in the current Python 3.13 environment. Other Python and OS combinations have not been individually verified.
 
 ```bash
-# Activate an existing environment on Windows
-.venv\Scripts\activate
-
-# Process one file (fast mode is the default)
-python morse_cli.py auto "file.wav"
-
-# Look up callsigns online
-python morse_cli.py auto "file.wav" --lookup-callsigns
-
-# Thorough processing
-python morse_cli.py auto "file.wav" --mode thorough
-
-# Thorough processing with callsign lookup
-python morse_cli.py auto "file.wav" --mode thorough --lookup-callsigns
-
-# Process a folder
-python morse_cli.py batch TrainingData
-
-# Batch processing with four workers
-python morse_cli.py batch TrainingData --workers 4
-
-# Batch processing with callsign lookup
-python morse_cli.py batch TrainingData --lookup-callsigns
-
-# Decode using a .config.json file
-python morse_cli.py decode "file.wav"
-python morse_cli.py decode "file.wav" --config custom.config.json
-python morse_cli.py decode "file.wav" --analyze
-
-# Experimental parameter search
-python morse_cli.py experiment "file.wav" --iterations 50
-
-# Help
-python morse_cli.py --help
-```
-
-CLI messages and help are in English by default. Add `--ru` before the command or after its arguments to use Russian:
-
-```bash
-python morse_cli.py auto recording.wav --ru
-python morse_cli.py --ru batch TrainingData
-python morse_cli.py decode --help --ru
-```
-
-This flag changes console messages. It does not translate decoded text or change the language of saved reports.
-
-### Installation and Other Ways to Run
-
-#### Installation
-
-```bash
-# Clone the repository
 git clone https://github.com/tixset/MorseDecoder.git
 cd MorseDecoder
-
-# Create a virtual environment
-python -m venv .venv
-.venv\Scripts\activate     # Windows
-source .venv/bin/activate  # Linux/macOS
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-MP3 and OGG require **FFmpeg** to be available in `PATH`. For example, on Debian/Ubuntu:
-
-```bash
-sudo apt install ffmpeg
-python morse_cli.py auto recording.mp3
-```
-
-Compressed input is automatically converted to a temporary WAV file, which is removed after processing. The `.txt` report and `.config.json` file are saved beside the original audio. The `batch` command selects WAV files.
-
-If NumPy and SciPy report incompatible versions, install the dependencies in a separate virtual environment:
-
-```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-#### GUI
+On Windows, activate with `.venv\Scripts\activate` in cmd or `.venv\Scripts\Activate.ps1` in PowerShell; you can use `py -3` instead of `python3`.
+
+MP3/OGG input requires system **FFmpeg** in `PATH`. The GUI also requires Tkinter and a graphical session. On Debian/Ubuntu, install system components with:
 
 ```bash
-# Open the parameter tuning GUI
+sudo apt install python3-venv python3-tk ffmpeg
+ffmpeg -version
+```
+
+`pip install -r requirements.txt` does not install FFmpeg or Tkinter. NumPy and SciPy process signals; requests/aiohttp handle callsign requests, Numba provides acceleration, and pydub is used by the separate converter. The main CLI converts MP3/OGG directly through FFmpeg. `tqdm` is optional: tuning works without its progress bar.
+
+## 🚀 Quick start
+
+```bash
+python morse_cli.py auto recording.wav
+python morse_cli.py auto recording.mp3 --ru
+python morse_cli.py auto recording.wav --mode thorough
+python morse_cli.py decode recording.wav --analyze
+python morse_cli.py batch recordings --workers 4
 python morse_tuner_gui.py
 ```
 
-#### Python API
+Supply your own recording path; `recordings` is your WAV folder. `decode` requires a configuration created by `auto`. The repository includes a [noisy recording](tests/fixtures/noisy_cw.mp3) and its [reference transcription](tests/fixtures/noisy_cw.json) for a reproducible check:
+
+```bash
+python morse_cli.py auto tests/fixtures/noisy_cw.mp3 --ru
+```
+
+CLI messages are English by default. `--ru` works before or after the subcommand and changes console messages and help. Both EN/RU transcriptions are saved independently of this flag; TXT report headings and the GUI remain Russian.
+
+## 🎯 Features and limitations
+
+- `auto`: carrier detection and threshold tuning for one signal; TXT report and JSON configuration beside the audio.
+- `batch`: process `*.wav` directly within a folder, with multiple worker threads.
+- `decode`: decode again using saved parameters, with console output.
+- `multi`: experimental frequency separation of signals, with TXT/JSON reports.
+- `experiment`: random parameter search, saved to `experiment_results.json`.
+
+The decoder handles CW. PSK31/RTTY classification in the analyzer does not mean those modulations can be decoded. Noise, frequency drift, overlapping signals, and unusual timing can cause errors. A larger parameter search does not guarantee improvement.
+
+`auto --analyze` is unsupported: `auto` already includes code analysis; the extra flag belongs to `decode`. Russian abbreviations are available through the Python API, but the CLI has no switch that forces their complete listing. See the [code reference](docs/SUPPORTED_CODES.en.md) for an example.
+
+## 💻 More CLI examples
+
+```bash
+# Tuning with network callsign lookup
+python morse_cli.py auto recording.wav --lookup-callsigns
+python morse_cli.py auto recording.wav --mode thorough --lookup-callsigns
+
+# WAV folder with callsign lookup or sequential processing
+python morse_cli.py batch recordings --lookup-callsigns --workers 4
+python morse_cli.py batch recordings --workers 1
+
+# Explicit configuration; create it with auto first
+python morse_cli.py decode recording.wav --config custom.config.json
+
+# Multiple frequency bands and experimental search
+python morse_cli.py multi recording.wav --bands "400-800,1000-1400"
+python morse_cli.py experiment recording.wav --iterations 50
+
+# Russian language before the command; command-specific help
+python morse_cli.py --ru batch recordings
+python morse_cli.py decode --help --ru
+python morse_cli.py --help
+```
+
+### 📡 Callsign lookup
+
+`--lookup-callsigns` (alias `--lookup`) enables network requests in `auto`, `batch`, and `multi`. In `decode`, the flag is accepted but not used by the handler yet. Requests to HamQTH, RadioQTH, QRZ.RU, and APRS.fi are implemented; availability depends on external services.
+
+Synchronous lookup caches results in `callsign_cache/` for up to 7 days. The implementation includes Cyrillic callsign conversion using Morse equivalents and batch lookup with delays between requests. Matches remain candidates, and a network response does not verify the entire transcription.
+
+## 🔧 Python usage
+
+Manual tuning example for the reference recording (these parameters are not universal):
 
 ```python
 from modules.morse_decoder import MorseDecoder
 
-# Configurable parameters
 decoder = MorseDecoder(
     sample_rate=8000,
-    pulse_percentile=85,         # Pulse threshold control
-    gap_percentile_dot_dash=62,  # Gap threshold control
-    gap_percentile_char=90,      # Character gap percentile
-    gap_percentile_word=92       # Word gap percentile
+    auto_frequency=True,
+    pulse_percentile=70,
+    gap_percentile_dot_dash=55,
+    gap_percentile_char=75,
+    gap_percentile_word=90,
 )
-
-text_en, text_ru, stats = decoder.process_file('audio.wav')
-
-print(f"Speed: {stats['wpm']} WPM")
-print(f"English: {text_en}")
-print(f"Russian: {text_ru}")
+text_en, text_ru, stats = decoder.process_file(
+    "tests/fixtures/noisy_cw.mp3", analyze_procedural=False, verbose=False
+)
+if stats.get("error"):
+    raise RuntimeError(stats["error"])
+print(f"WPM: {stats['wpm']}")
+print(text_en)
+print(text_ru)
 ```
 
-## How It Works
+For your own recording, tune parameters automatically:
 
-1. **Load audio**: read WAV data or convert compressed input, then convert to mono.
-2. **Filter the signal**: isolate the carrier band; the legacy fixed band is 400–1200 Hz.
-3. **Detect the envelope**: extract the signal's amplitude envelope.
-4. **Detect pulses**: determine the start and end of keyed signals.
-5. **Classify pulses**: separate dots and dashes by duration.
-6. **Group symbols**: use gaps to form letters and words.
-7. **Decode**: convert Morse sequences into text.
+```python
+from modules.auto_tune import auto_tune_parameters
+from modules.procedural_codes import ProceduralCodeDetector
 
-## Project Structure
+result = auto_tune_parameters("recording.wav", mode="fast")
+if result is not None:
+    codes = ProceduralCodeDetector().detect_codes(result["text_ru"])
+    print(codes["ru_procedural_abbr"])
+```
 
-### Main Scripts
+This call saves TXT and JSON beside the audio. For a fixed band, use `MorseDecoder(auto_frequency=False, min_freq=400, max_freq=800)`. Choose `min_freq`/`max_freq` for your recording. See the [API and code reference](docs/SUPPORTED_CODES.en.md).
 
-- **morse_cli.py** ⭐: unified CLI (`auto`, `batch`, `decode`, `multi`, `experiment`).
-- **morse_tuner_gui.py**: GUI sliders for manual tuning.
-- **run_all_tests.py**: test suite runner.
+## ⚙️ How it works
 
-### Utilities (`tools/`)
+1. Load WAV and convert to mono; MP3/OGG are first converted through FFmpeg.
+2. Search for the dominant tone within 250–3000 Hz and filter a narrow band around it. Fixed mode uses the specified band.
+3. Extract and smooth the amplitude envelope.
+4. Detect pulse starts and ends with two switching thresholds.
+5. Estimate dot duration and the 1:3 dot/dash ratio; check timing reliability.
+6. Group symbols and words using gaps; reliable timing uses Morse ratios 1:3:7, otherwise a threshold-based fallback is used.
+7. Convert Morse patterns to EN/RU text, analyze codes, and produce results.
 
-- **convert_mp3_to_wav.py**: MP3-to-WAV conversion (8 kHz mono).
+### 🔊 Noisy recordings
 
-### Modules (`modules/`)
+Bridging gaps shorter than 10 ms and rejecting pulses shorter than 15 ms reduces noise-induced fragmentation of dots and dashes. Pulse and gap durations determine the text without a dictionary of expected phrases. The configuration saves `auto_frequency` so `decode` reuses the selected processing method; `multi` retains separate signal bands.
 
-- **morse_decoder.py**: main decoder class.
-- **procedural_codes.py**: detection of Q/Z codes and prosigns.
-- **callsign_lookup.py**: callsign information lookup through APIs.
-- **auto_tune.py**: automatic parameter selection.
-- **analyze_codes.py**: analysis of detected codes.
-- **fuzzy_matcher.py**: fuzzy code matching.
+The [reference recording](tests/fixtures/noisy_cw.mp3) has a user-provided [Morse and Russian transcription](tests/fixtures/noisy_cw.json). Exact recovery after tuning does not guarantee accuracy elsewhere: deep fading, overlapping signals, and very fast CW can still cause errors. There is no guaranteed WPM range for every recording.
 
-### File Layout
+## 🔤 Supported symbols and codes
+
+The tables contain Latin and Russian letters, digits 0–9, and punctuation. EN lists `. , ? ' ! / ( ) & : ; = + - _ " $ @`; RU lists `. , ? ' ! / ( ) : ; =`. This describes table contents, not unambiguous output: prosigns are checked first. For example, `.-.-.` renders as `<AR>` rather than `+`; current F/Ф/Э ambiguities are explained in the [reference](docs/SUPPORTED_CODES.en.md).
+
+| Category | Entries | Examples |
+| --- | ---: | --- |
+| Q codes | 53 | `QSL`: acknowledge reception; `QTH`: location; `QRZ`: who is calling |
+| Z codes | 33 | `ZAA`: radio discipline; `ZAG`: interrupt transmission |
+| Y codes | 26 | `YAA`, `YBB` |
+| Shch codes | 3 | `ЩРТ`, `ЩРЩ`, `ЩСА` |
+| CW abbreviations | 25 | `RPT`: repeat; `DE`: from; `CQ`: general call |
+| Prosigns | 11 | `<AR>`, `<SK>`, `<BT>`, `<HH>`; some names are aliases |
+| Russian abbreviations | 7 | `РПТ`: repeat; `АЛ`: all just transmitted |
+| Maritime / weather codes | 18 / 9 | `NC`, `WX` |
+| Soviet codes / SINPO | 12 / 5 | Separate dictionary categories |
+
+`code_dictionaries.py` contains 18 dictionaries, including callsign helpers, phonetic alphabets, and RST. Not every dictionary is an automatic detection category; meanings reflect project data and require context. See [SUPPORTED_CODES.en.md](docs/SUPPORTED_CODES.en.md) for the complete inventory.
+
+## 🏗️ Project structure
+
+The CLI, GUI, and test runner live in the root; implementation is in `modules/`, and helper tools are in `tools/`.
 
 ```text
 MorseDecoder/
-├── morse_cli.py                       # Unified CLI
-├── morse_tuner_gui.py                 # Parameter tuning GUI
-├── run_all_tests.py                   # Test runner
-├── requirements.txt                  # Dependencies
-├── LICENSE                           # MIT License
-├── CHANGELOG.en.md                    # English change history
-├── CONTRIBUTING.en.md                 # English contributor guide
-├── modules/                          # Decoder modules
-│   ├── morse_decoder.py              # Main decoder
-│   ├── signal_analyzer.py            # Signal analysis
-│   ├── multi_signal_decoder.py       # Multi-signal decoding
-│   ├── procedural_codes.py           # Procedural code detector
-│   ├── code_dictionaries.py          # Central code dictionaries
-│   ├── callsign_lookup.py            # Synchronous callsign lookup
-│   ├── callsign_lookup_async.py      # Asynchronous callsign lookup
-│   ├── auto_tune.py                  # Parameter tuning
-│   ├── analyze_codes.py              # Code analysis
-│   ├── fuzzy_matcher.py              # Fuzzy matching with LRU cache
-│   ├── levenshtein_optimized.py      # Numba-optimized Levenshtein distance
-│   ├── audio_input.py                # Compressed audio preparation
-│   ├── console_i18n.py               # Console language selection
-│   ├── console_en.json               # English console translations
-│   ├── cw_frontend.py                # Carrier filtering and keying detection
-│   └── morse_timing.py               # Dot/dash timing estimation
-├── docs/                             # Documentation in both languages
-│   ├── USAGE_GUIDE.en.md             # CLI guide
-│   ├── SUPPORTED_CODES.en.md         # Code reference
-│   └── MULTI_SIGNAL_DECODING.en.md    # Multi-signal guide
+├── morse_cli.py
+├── morse_tuner_gui.py
+├── run_all_tests.py
+├── requirements.txt
+├── LICENSE
+├── README.md / README.en.md
+├── CHANGELOG.md / CHANGELOG.en.md
+├── CONTRIBUTING.md / CONTRIBUTING.en.md
+├── modules/
+│   ├── __init__.py
+│   ├── audio_input.py
+│   ├── cw_frontend.py
+│   ├── morse_timing.py
+│   ├── morse_decoder.py
+│   ├── auto_tune.py
+│   ├── multi_signal_decoder.py
+│   ├── signal_analyzer.py
+│   ├── procedural_codes.py
+│   ├── code_dictionaries.py
+│   ├── callsign_lookup.py
+│   ├── callsign_lookup_async.py
+│   ├── analyze_codes.py
+│   ├── fuzzy_matcher.py
+│   ├── levenshtein_optimized.py
+│   ├── console_i18n.py
+│   └── console_en.json
+├── docs/
+│   ├── USAGE_GUIDE.md / USAGE_GUIDE.en.md
+│   ├── SUPPORTED_CODES.md / SUPPORTED_CODES.en.md
+│   ├── MULTI_SIGNAL_DECODING.md / MULTI_SIGNAL_DECODING.en.md
+│   └── ARCHITECTURE.md / ARCHITECTURE.en.md
 ├── tools/
-│   └── convert_mp3_to_wav.py         # MP3-to-WAV converter
-├── tests/                            # Test scripts and reference fixture
-└── TrainingData/                     # Local test recordings, when provided
+│   └── convert_mp3_to_wav.py
+├── tests/
+│   ├── __init__.py
+│   ├── test_*.py
+│   └── fixtures/
+│       ├── noisy_cw.mp3
+│       └── noisy_cw.json
+└── .github/
+    ├── ISSUE_TEMPLATE/
+    ├── PULL_REQUEST_TEMPLATE.md
+    └── PULL_REQUEST_TEMPLATE/english.md
 ```
 
-## Supported Characters
+`TrainingData/` is an optional local recording folder. It, `reports/`, `callsign_cache/`, `.venv/`, and generated outputs are ignored by Git. See the [architecture guide](docs/ARCHITECTURE.en.md) for each module’s purpose.
 
-### English Alphabet
+## 📊 Interpreting result metrics
 
-A–Z, 0–9, and punctuation (`. , ? ' ! / ( ) & : ; = + - _ " $ @`).
+`□` denotes an unknown symbol; `?` is a real question mark. The proportion without `□` measures dictionary coverage, not transcription accuracy. `score` is a heuristic for comparing candidates and can be negative. `transcription_verified: false` means the result was not checked against a reference.
 
-### Russian Alphabet
+WPM is estimated from dot and dash durations. Unreliable timing produces an unknown speed (0 in the data). Signal metrics and operator ratings are approximate. Callsigns are pattern candidates; dictionary code matches do not establish a message's meaning.
 
-А–Я, 0–9, and punctuation (`. , ? ' ! / ( ) : ; =`).
+## 📚 Documentation and verification
 
-### Procedural Codes
+- [CLI guide, output formats, and troubleshooting](docs/USAGE_GUIDE.en.md)
+- [Codes, alphabets, and Python API](docs/SUPPORTED_CODES.en.md)
+- [Multiple signals](docs/MULTI_SIGNAL_DECODING.en.md)
+- [Project structure and helper tools](docs/ARCHITECTURE.en.md)
+- [Contributing and testing](CONTRIBUTING.en.md)
+- [Changelog](CHANGELOG.en.md)
 
-#### Q Codes (International)
+```bash
+python run_all_tests.py
+```
 
-- QSL: reception confirmed.
-- QTH: your location?
-- QRZ: who is calling me?
-- QRM: interference from other stations.
-- QRN: atmospheric interference.
-- And others.
-
-#### Z Codes (Procedural, ACP-131)
-
-- ZAA: you are not observing radio discipline.
-- ZAB: your keying speed is incorrectly set.
-- ZAG: interrupt transmission.
-- ZAK: transmission interrupted at…
-- ZRP: return to automatic relay.
-- And others.
-
-#### CW Abbreviations
-
-- RPT: repeat.
-- DE: from.
-- SK: end of contact.
-- AR: end of message.
-- CQ: general call.
-- And others.
-
-See the [full code reference](docs/SUPPORTED_CODES.en.md).
-
-## 📚 Additional Documentation
-
-- [CLI usage guide](docs/USAGE_GUIDE.en.md).
-- [Supported code reference](docs/SUPPORTED_CODES.en.md).
-- [Multi-signal decoding guide](docs/MULTI_SIGNAL_DECODING.en.md).
-- English GitHub templates: [bug report](.github/ISSUE_TEMPLATE/bug_report.en.md), [feature request](.github/ISSUE_TEMPLATE/feature_request.en.md), and [pull request](.github/PULL_REQUEST_TEMPLATE.en.md).
+Test reports appear in `reports/`. FFmpeg is required for the MP3 regression; related tests are skipped without it. License: [MIT](LICENSE).
 
 ## ⚠️ Troubleshooting
 
-**No pulses detected:** use the GUI (`morse_tuner_gui.py`) to adjust thresholds.
+| Problem | What to check |
+| --- | --- |
+| No pulses detected | Check for audible CW; try the GUI pulse threshold and a suitable frequency band |
+| Incorrect text or many `□` symbols | Check carrier, interference, and timing; try tuning or manual parameters and compare against the audio |
+| NumPy/SciPy incompatibility | Create a separate `.venv` and install `requirements.txt` as described in installation |
+| MP3/OGG does not open | Check FFmpeg in `PATH`: `ffmpeg -version` |
+| `auto --analyze` fails | Omit the flag from `auto`, or run `decode --analyze` with a saved configuration |
+| GUI fails to start | Check Tkinter and availability of a graphical session |
 
-**Incorrect recognition:** try different GUI threshold settings or decoder parameters.
+A question mark is transmitted as `..--..`; an unknown pattern is shown as `□`. In `QRZ? DE IM4TET K □ TEST`, the question mark is a recognized character and the square is unknown. Even a recognized character can be incorrect under interference.
 
-**Many `□` characters:** check the source audio and the frequency band. Current automatic mode detects the carrier; fixed-band mode uses the range you configure.
+For best results, use recordings with distinguishable CW and minimal overlap from other signals. More guidance is available in the [CLI guide](docs/USAGE_GUIDE.en.md).
 
-## 📝 Notes
+## 🆕 Historical updates and experiments
 
-### Understanding the Decoded Output
+The **January 7, 2026** update centralized dictionaries, removed duplicated constants, and added LRU, aiohttp, and Numba optimizations. The old README quoted 3–5× faster fuzzy matching, callsign lookup reduced from 12 to 0.92 seconds, and about 326,000 Levenshtein operations per second. These are historical individual measurements, not current-version benchmarks verified here. See the [changelog](CHANGELOG.en.md) for history.
 
-- **`□` (white square)** is an unrecognized Morse symbol. It appears when the decoder encounters an unknown dot/dash sequence and may indicate interference or distortion.
-- **`?` (question mark)** is an actual Morse question mark, `··--··` (`..--..` in the program). Do not treat it as a decoding failure.
+The old README also reported **zero Q/Z code detections in 40 experiments** on noisy WebSDR recordings, with `Р` matched six times and `ДЕ` twice. This describes an earlier experiment series; it does not characterize the corrected decoder or establish the meaning of dictionary matches. The current noisy-CW regression uses a separate reference in `tests/fixtures/`.
 
-```text
-QRZ? DE IM4TET K □ TEST
-   ↑            ↑
-question mark   unrecognized symbol
-```
+## 📄 License and contributions
 
-### General Guidance
-
-- Decoding quality depends on the source signal.
-- Clear recordings with little noise generally produce better results.
-- The decoder estimates sending speed automatically. The original guide targeted roughly 5–40 WPM; current noisy-audio regression cases cover 12–50 WPM.
-- Supported inputs are WAV, MP3, and OGG, with FFmpeg conversion for compressed formats.
-
-## 📄 License
-
-MIT License — see [LICENSE](LICENSE).
-
-## 🤝 Contributing
-
-Pull requests are welcome. For larger changes, open an issue first to discuss the proposal.
-
-See [CONTRIBUTING.en.md](CONTRIBUTING.en.md).
+The project uses the [MIT License](LICENSE). Pull requests are welcome; major changes benefit from prior discussion in [Issues](https://github.com/tixset/MorseDecoder/issues). See [CONTRIBUTING.en.md](CONTRIBUTING.en.md) for development and validation instructions.
 
 ## 📞 Contact
 
-- **Author:** Anton Zelenov.
-- **Email:** tixset@gmail.com.
-- **GitHub:** https://github.com/tixset/MorseDecoder.
+- **Author:** Anton Zelenov
+- **Email:** tixset@gmail.com
+- **GitHub:** [tixset/MorseDecoder](https://github.com/tixset/MorseDecoder)
 
----
-
-**Made with ❤️ for amateur radio operators and radio communications specialists.**
-
-### Interpreting Result Metrics
-
-`Heuristic score` is an internal score for comparing tested parameters, not an accuracy percentage. The fraction of characters without `□` does not establish transcription accuracy either. Callsigns matched by a pattern are listed as candidates.
-
-WPM is estimated from dot duration and the 1:3 dot/dash duration ratio. When timing data is insufficient or inconsistent, speed is marked as unknown. Operator skill is not classified when signal evidence is unreliable or affected by interference.
-
-### Decoding Noisy Recordings
-
-In `auto` mode, the program searches for a dominant tone between 250 and 3000 Hz, isolates a narrow band around it, and smooths the envelope. Two switching thresholds, bridging of dropouts shorter than 10 ms, and rejection of pulses shorter than 15 ms reduce the fragmentation of dots and dashes. Symbols are determined from pulse and gap durations, without a dictionary of expected phrases.
-
-The JSON configuration stores `auto_frequency`, so `decode` uses the same processing method. To use a fixed band through the Python API, set `MorseDecoder(auto_frequency=False, min_freq=400, max_freq=800)`. The `multi` command retains separate frequency bands for separate signals.
-
-The reference recording and user-supplied transcription are in `tests/fixtures/`. Correctly decoding one recording does not guarantee accuracy on every recording: overlapping signals, deep fading, and very fast CW can still cause errors.
+Made with ❤️ for amateur radio operators and radio communication specialists.

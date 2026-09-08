@@ -1,31 +1,86 @@
-# Supported Codes and Characters in Morse Decoder
+# 🔤 Supported codes and symbols
 
-[Русский](SUPPORTED_CODES.md) | **English** | [README](../README.en.md)
+[![Русский](https://img.shields.io/badge/Language-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-lightgrey)](SUPPORTED_CODES.md) [![English](https://img.shields.io/badge/Language-English-blue)](SUPPORTED_CODES.en.md)
 
-**Updated:** January 6, 2026\
-**Version:** 2.0
+[CLI guide](USAGE_GUIDE.en.md) · [README](../README.en.md)
 
-This translates the January 2026 reference, including its historical counts and examples. Current definitions are in [modules/code_dictionaries.py](../modules/code_dictionaries.py); the counts in the older reference and release notes differ. Fuzzy matching must be enabled explicitly in the detector. Cyrillic codes and Russian phonetic words below are intentionally preserved as data.
+## 📋 What support means
 
----
+The following lists the actual dictionaries in [code_dictionaries.py](../modules/code_dictionaries.py), not verified compliance with international or departmental standards. Meanings come from the project; their applicability depends on context. A short word matching a dictionary does not establish that a command was transmitted.
 
-## 📋 Overview
+The audio decoder converts CW into text; `ProceduralCodeDetector` separately searches decoded text. By default it matches exact words after uppercasing and splitting on whitespace. Attached punctuation can prevent a match. Fuzzy matching is **disabled** by default; the API can enable it, but this increases false positives.
 
-The decoder includes a large collection of international and Russian procedural codes used in radio communication. Code detection supports fuzzy matching to compensate for decoding errors.
+## 🇷🇺 Getting Russian abbreviations
 
-**Total support stated in this reference:** 250+ codes and characters
+The CLI has no switch to force complete Russian analysis. `--ru` translates console messages, `auto` analyzes codes in EN, and `decode --analyze` only adds brief counts without guaranteeing selection of Russian text. `auto --analyze` does not exist.
 
----
+To reliably retrieve dictionary explanations from Russian text:
 
-## 📡 Q Codes (International, ITU-R M.1172)
+```python
+from modules.procedural_codes import ProceduralCodeDetector
 
-**Count:** 60+ codes\
-**Purpose:** International radio codes that simplify communication
+detector = ProceduralCodeDetector()
+result = detector.detect_codes("РПТ АЛ")
+for item in result["ru_procedural_abbr"]:
+    print(item["code"], "—", item["meaning"])
+```
 
-### Main Q Codes
+Output (meanings are stored in Russian):
+
+```text
+РПТ — Повторите
+АЛ — Всё, что только передано
+```
+
+These mean “Repeat” and “All just transmitted”. To obtain text from a recording, tune its parameters first. This call also saves TXT and configuration files beside the audio:
+
+```python
+from modules.auto_tune import auto_tune_parameters
+from modules.procedural_codes import ProceduralCodeDetector
+
+decoded = auto_tune_parameters("tests/fixtures/noisy_cw.mp3", mode="fast")
+if decoded is None:
+    raise RuntimeError("Decoding failed")
+detector = ProceduralCodeDetector()
+result = detector.detect_codes(decoded["text_ru"])
+print(result["ru_procedural_abbr"])
+```
+
+Result fields include `q_codes`, `y_codes`, `z_codes`, `shch_codes`, `ru_procedural_abbr`, `soviet_codes`, `cw_abbreviations`, `prosigns`, `sinpo_codes`, `maritime_codes`, `meteo_codes`, `service_signals`, `urgency_level`, `callsigns`, `message_structure`, `check_field`, and `message_number`. Service signals use `signal` instead of the usual `code` key. `CHECK N` and `NR N` are extracted separately. Dictionary results have Russian `meaning` values; request a formatted report with `detector.format_analysis(result, language="en")`, but use the result dictionary for full category access.
+
+To enable fuzzy matching, create `ProceduralCodeDetector(use_fuzzy_matching=True, max_errors=1)`. Its matches and some entry structures differ from exact mode; these are guesses about similar codes rather than verified text recovery.
+
+## 📊 Dictionary inventory
+
+Counts are the number of keys in each dictionary. Do not sum them as unique automatically detected commands: categories overlap, and phonetic alphabets and RST are helper data rather than separate `detect_codes` result categories. Codes and Russian phonetic words are preserved untranslated in both versions.
+
+| Dictionary | Entries |
+| --- | ---: |
+| `Q_CODES` | 53 |
+| `Y_CODES` | 26 |
+| `Z_CODES` | 33 |
+| `CW_ABBREVIATIONS` | 25 |
+| `PROSIGNS` | 11 |
+| `SHCH_CODES` | 3 |
+| `RU_PROCEDURAL_ABBR` | 7 |
+| `SINPO_CODES` | 5 |
+| `MARITIME_CODES` | 18 |
+| `SOVIET_CODES` | 12 |
+| `METEO_CODES` | 9 |
+| `URGENCY_LEVELS` | 4 |
+| `SERVICE_SIGNALS` | 4 |
+| `RST_CODES` | 1 |
+| `INTERNATIONAL_PHONETIC` | 36 |
+| `RUSSIAN_PHONETIC` | 31 |
+
+Additionally, `DXCC_PREFIX_MAP` (58 keys) and `MORSE_RU_TO_LATIN_CALLSIGN` (31) support callsign lookup and rendering.
+
+## 📡 Q codes
+
+`Q_CODES` · 53
 
 | Code | Meaning |
-|-----|----------|
+| --- | --- |
 | QSL | Reception confirmed |
 | QTH | Your location? |
 | QRZ | Who is calling me? |
@@ -45,37 +100,47 @@ The decoder includes a large collection of international and Russian procedural 
 | QRQ | Send faster |
 | QRS | Send more slowly |
 | QRU | Any messages for me? |
+| QRW | Tell ... that I am calling |
 | QSA | Signal strength (1-5) |
 | QSP | Relay to... |
 | QSX | Listening on frequency... |
 | QSZ | Send each word twice |
 | QTC | Number of messages |
-
-### Additional Q Codes
-
-| Code | Meaning |
-|-----|----------|
-| QRO | Increase transmitter power |
-| QRP | Reduce power (<10W) |
-| QSD | Defective telegraphy |
-| QSK | Can I hear between my signals? |
-| QFE | Airfield-level pressure |
+| QTU | Station operating hours |
+| QFE | Atmospheric pressure at airfield level |
 | QNH | Sea-level pressure |
 | QTF | Your position by bearing |
+| QRO | Increase transmitter power |
+| QRP | Reduce transmitter power (also: low power <10W) |
+| QRH | Is the frequency varying? |
+| QRI | Tone of my signal |
+| QRJ | How many voice calls? |
+| QRY | What is my turn? |
+| QSD | Defective telegraphy |
+| QSG | Send several telegrams |
+| QSK | Can I hear between my signals? |
+| QSM | Repeat the last telegram |
+| QSN | Did you hear me on ... (frequency)? |
+| QSU | Transmit on this frequency |
+| QSV | Transmit a series of V characters |
+| QSW | Transmit on ... (frequency) |
+| QTA | Cancel telegram number... |
+| QTB | Do you agree with my word count? |
+| QTV | Keep watch on ... (frequency) |
+| QTX | Stay in contact with me |
 | QUA | Any news of...? |
+| QUC | Last received telegram number... |
+| QUD | Did you receive the urgency signal? |
+| QUE | Can you speak ... (language)? |
+| QUF | Distress signal received from... |
 | QUM | Resume normal operation |
 
-**Full list:** this historical reference lists 60+ codes. See [code dictionaries](../modules/code_dictionaries.py) and the [detector](../modules/procedural_codes.py) for current definitions.
+## ✈️ Y codes
 
----
-
-## ✈️ Y Codes (Aviation Procedural Codes)
-
-**Count:** 26 codes\
-**Purpose:** Aviation radio communication and dispatch control
+`Y_CODES` · 26
 
 | Code | Meaning |
-|-----|----------|
+| --- | --- |
 | YAA | Unable to comply with instructions |
 | YBB | Following instructions |
 | YCC | Receipt and understanding confirmed |
@@ -83,113 +148,132 @@ The decoder includes a large collection of international and Russian procedural 
 | YEE | Execute immediately |
 | YFF | Flight conditions |
 | YGG | Weather conditions |
+| YHH | Hold position |
 | YII | Identification required |
+| YJJ | Join the formation |
 | YKK | Maintain radio silence |
 | YLL | Landing cleared |
 | YMM | Medical assistance required |
 | YNN | Navigation assistance |
+| YOO | Target interception |
+| YPP | Patrolling |
+| YQQ | Request permission |
+| YRR | Return to base |
 | YSS | Search and rescue operation |
+| YTT | Tactical information |
 | YUU | Urgent message |
+| YVV | Visual contact |
 | YWW | Warning |
+| YXX | Execute special instructions |
 | YYY | Yes/confirmed |
+| YZZ | Area of operations |
 
----
+## 🎖️ Z codes
 
-## 🎖️ Z Codes (Procedural Signals, ACP-131)
-
-**Count:** 29 codes\
-**Purpose:** Procedural radio commands
+`Z_CODES` · 33
 
 | Code | Meaning |
-|-----|----------|
+| --- | --- |
 | ZAA | You are not observing radio discipline |
 | ZAB | Your keying speed is incorrectly set |
-| ZAC | Transmitting on frequency... |
+| ZAC | Transmitting on ... / What frequency are you receiving? |
+| ZAD | Your signal received as ... (1-5) |
 | ZAE | Cannot receive you |
-| ZAG | Interrupt transmission |
+| ZAF | Connecting you to... |
+| ZAG | Interrupt / Interrupting transmission |
+| ZAH | Cannot transmit the message |
+| ZAI | Start (test) |
+| ZAJ | Cannot break through to you |
+| ZAK | Transmission interrupted at... |
+| ZAL | Your frequency is varying |
 | ZAM | Transmitting blind |
 | ZAN | Cannot read you |
+| ZAO | Hearing you weakly |
 | ZAP | Increase power |
 | ZAQ | Reduce power |
+| ZAR | My callsign is... |
 | ZAS | Switch to frequency... |
+| ZAT | My calling designation is... |
+| ZAU | Backup frequency... |
+| ZAV | Will listen on... |
+| ZAW | Switch to backup channel |
+| ZAX | Listening on frequency... |
 | ZBK | Receiving my automatic transmission? |
+| ZBW | Switch to backup frequency number... |
 | ZNB | No breaks / Breaks |
+| ZRP | Return to automatic relay |
 | ZUA | Time request |
 | ZUG | Your signal is distorted |
-| ZVA | Procedural priority (1-5) |
+| ZUJ | Send in groups of... |
+| ZUP | Interference from... |
+| ZVA | Military precedence (level 1-5) |
 
----
+## 📝 CW abbreviations
 
-## 🔧 Prosigns (Procedural Signs)
-
-**Count:** 12 signs\
-**Purpose:** Special signals used to control a transmission
-
-| Code | Morse | Meaning |
-|-----|-------|----------|
-| AR | •-•-• | End of transmission |
-| SK | •••-•- | End of contact |
-| BT | -•••- | Separator |
-| K | -•- | Transmitting |
-| KN | -•--• | Only you |
-| AS | •-••• | Stand by |
-| CT | -•-•- | Start of transmission |
-| HH | •••••••• | Error |
-| SN | •••-• | Understood |
-| VA | •••-•- | End of work |
-| R | •-• | Understood/received |
-| INT | ••-• | Question |
-
----
-
-## 📝 CW Abbreviations (Amateur Radio)
-
-**Count:** 25 codes\
-**Purpose:** Common abbreviations used in CW communication
+`CW_ABBREVIATIONS` · 25
 
 | Code | Meaning |
-|-----|----------|
-| CQ | General call |
+| --- | --- |
+| RPT | Repeat |
 | DE | From |
-| TNX/TU | Thank you |
+| FB | Excellent |
+| SK | End of contact |
+| AR | End of message |
+| BT | Separator |
+| CQ | General call |
+| TNX | Thank you |
+| TU | Thank you |
 | UR | Your |
-| PSE | Please |
-| FB | Excellent (Fine Business) |
-| OM | Old friend (Old Man) |
-| YL | Young lady (Young Lady) |
-| GA/GE/GM/GN | Greetings (afternoon/evening/morning/night) |
+| OM | Old friend |
+| YL | Young lady |
+| GA | Good afternoon |
+| GE | Good evening |
+| GM | Good morning |
+| GN | Good night |
 | WX | Weather |
 | HW | How |
 | CPY | Copy |
+| PSE | Please |
 | CFM | Confirmed |
 | NIL | Nothing |
 | MSG | Message |
 | NR | Number |
 | INFO | Information |
-| RPT | Repeat |
 
----
+## 🔧 Prosigns
 
-## 🇷🇺 Russian Shch Codes
-
-**Count:** 3 codes\
-**Purpose:** Russian procedural codes
+`PROSIGNS` · 11
 
 | Code | Meaning |
-|-----|----------|
+| --- | --- |
+| AR | End of transmission (•-•-•) |
+| SK | End of contact (•••-•-) |
+| BT | Separator (-•••-) |
+| KA | Starting transmission (-•-•-) |
+| KN | Only you (-•--•) |
+| AS | Stand by (•-•••) |
+| CT | Start of transmission (-•-•-) |
+| HH | Error (••••••••) |
+| SN | Understood (•••-•) |
+| VA | End of work (•••-•-) |
+| INT | Question (••-•) |
+
+## 🇷🇺 Shch codes
+
+`SHCH_CODES` · 3
+
+| Code | Meaning |
+| --- | --- |
 | ЩРТ | Stop transmitting |
 | ЩРЩ | Send faster |
 | ЩСА | What is my signal strength? |
 
----
+## 📋 Russian procedural abbreviations
 
-## 📋 Russian Procedural Abbreviations
-
-**Count:** 7 codes\
-**Purpose:** Traditional Russian radio abbreviations
+`RU_PROCEDURAL_ABBR` · 7
 
 | Code | Meaning |
-|-----|----------|
+| --- | --- |
 | РПТ | Repeat |
 | АЛ | All just transmitted |
 | Р | Received |
@@ -198,15 +282,49 @@ The decoder includes a large collection of international and Russian procedural 
 | АС | Wait |
 | ДЕ | From |
 
----
+## 📊 SINPO
 
-## 🚩 Soviet Procedural Codes
-
-**Count:** 12 codes\
-**Purpose:** Codes used in Soviet radiograms
+`SINPO_CODES` · 5
 
 | Code | Meaning |
-|-----|----------|
+| --- | --- |
+| S | Signal strength (1-5) |
+| I | Interference (1-5) |
+| N | Noise (atmospheric noise: 1-5) |
+| P | Propagation (propagation/fading: 1-5) |
+| O | Overall (overall rating: 1-5) |
+
+## ⚓ Maritime codes
+
+`MARITIME_CODES` · 18
+
+| Code | Meaning |
+| --- | --- |
+| AA | All vessels leave the area |
+| AB | You must leave the area |
+| AC | I am leaving the area |
+| AD | In distress |
+| AE | Must abandon ship |
+| AF | Ship abandoned |
+| AG | Unable to leave |
+| CP | I/the vessel am/is proceeding to you |
+| DX | Sinking vessel |
+| EL | Repeat the signal |
+| NC | In distress, assistance required |
+| RY | You must act according to the code |
+| SO | You should stop |
+| SS | I/the vessel have/has stopped |
+| ZL | Your signal received but not understood |
+| ZM | You must act on this signal |
+| ZN | No (negative) |
+| ZO | Yes (affirmative) |
+
+## 🚩 Soviet codes
+
+`SOVIET_CODES` · 12
+
+| Code | Meaning |
+| --- | --- |
 | ПРМ | Receiving |
 | ПРД | Transmitting |
 | КНЦ | End |
@@ -220,40 +338,12 @@ The decoder includes a large collection of international and Russian procedural 
 | ШИФР | Encrypted message |
 | ОТКРЫТО | Plain text |
 
----
+## 🌦️ Weather codes
 
-## ⚓ INTERCO Maritime Codes
-
-**Count:** 16 codes\
-**Purpose:** International code of signals for maritime vessels
+`METEO_CODES` · 9
 
 | Code | Meaning |
-|-----|----------|
-| AA | All vessels leave the area |
-| AB | You must leave the area |
-| AC | I am leaving the area |
-| AD | In distress |
-| AE | Must abandon ship |
-| CP | I/the vessel am/is proceeding to you |
-| DX | Sinking vessel |
-| EL | Repeat the signal |
-| NC | In distress, assistance required |
-| RY | You must act according to the code |
-| SO | You should stop |
-| SS | I/the vessel have/has stopped |
-| ZL | Your signal received but not understood |
-| ZN | No (negative) |
-| ZO | Yes (affirmative) |
-
----
-
-## 🌦️ Weather Codes
-
-**Count:** 9 codes\
-**Purpose:** Codes for transmitting weather data
-
-| Code | Meaning |
-|-----|----------|
+| --- | --- |
 | WX | Weather |
 | TEMP | Temperature |
 | WIND | Wind |
@@ -264,236 +354,119 @@ The decoder includes a large collection of international and Russian procedural 
 | SNOW | Snow |
 | FOG | Fog |
 
----
+## ⚠️ Urgency
 
-## 📊 SINPO Codes (Signal Quality Rating)
+`URGENCY_LEVELS` · 4
 
-**Count:** 5 parameters\
-**Purpose:** A radio signal rating system using scores from 1 to 5
-
-| Parameter | Description |
-|----------|----------|
-| S | Signal strength |
-| I | Interference from other stations |
-| N | Noise (atmospheric noise) |
-| P | Propagation/fading |
-| O | Overall rating |
-
-**Example:** SINPO 54554 (excellent signal quality)
-
----
-
-## ⚠️ Priority Levels (Russian)
-
-**Count:** 4 levels\
-**Purpose:** Message priority classification
-
-| Level | Meaning |
-|---------|----------|
+| Code | Meaning |
+| --- | --- |
 | SAMOLET | Low priority |
 | MOLNIYA | Medium priority |
 | VSPYSHKA | High priority |
 | AVIA | Emergency |
 
----
+## 🚨 Service signals
 
-## 🚨 Service Signals
+`SERVICE_SIGNALS` · 4
 
-**Count:** 4 signals\
-**Purpose:** Distress and urgency signals
-
-| Signal | Meaning |
-|--------|----------|
-| SOS | Distress signal (•••---•••) |
+| Code | Meaning |
+| --- | --- |
+| SOS | Distress signal |
 | MAYDAY | Distress (voice) |
 | PAN | Urgency |
 | SECURITY | Safety |
 
----
+## 📈 RST reference
 
-## 🔤 Phonetic Alphabets
+`RST_CODES` · 1
 
-### International Phonetic Alphabet (ICAO/ITU)
+| Code | Meaning |
+| --- | --- |
+| RST | Readability-Strength-Tone |
 
-**Count:** 26 letters + 10 digits
+## 🔤 International phonetic alphabet
 
-| Letter | Word | Digit | Word |
-|-------|-------|-------|-------|
-| A | Alfa | 0 | Zero |
-| B | Bravo | 1 | One |
-| C | Charlie | 2 | Two |
-| D | Delta | 3 | Three |
-| E | Echo | 4 | Four |
-| F | Foxtrot | 5 | Five |
-| G | Golf | 6 | Six |
-| H | Hotel | 7 | Seven |
-| I | India | 8 | Eight |
-| J | Juliett | 9 | Niner |
-| K | Kilo | | |
-| L | Lima | | |
-| M | Mike | | |
-| N | November | | |
-| O | Oscar | | |
-| P | Papa | | |
-| Q | Quebec | | |
-| R | Romeo | | |
-| S | Sierra | | |
-| T | Tango | | |
-| U | Uniform | | |
-| V | Victor | | |
-| W | Whiskey | | |
-| X | X-ray | | |
-| Y | Yankee | | |
-| Z | Zulu | | |
+`INTERNATIONAL_PHONETIC` · 36
 
-### Russian Phonetic Alphabet
+| Code | Meaning |
+| --- | --- |
+| A | Alfa |
+| B | Bravo |
+| C | Charlie |
+| D | Delta |
+| E | Echo |
+| F | Foxtrot |
+| G | Golf |
+| H | Hotel |
+| I | India |
+| J | Juliett |
+| K | Kilo |
+| L | Lima |
+| M | Mike |
+| N | November |
+| O | Oscar |
+| P | Papa |
+| Q | Quebec |
+| R | Romeo |
+| S | Sierra |
+| T | Tango |
+| U | Uniform |
+| V | Victor |
+| W | Whiskey |
+| X | X-ray |
+| Y | Yankee |
+| Z | Zulu |
+| 0 | Zero |
+| 1 | One |
+| 2 | Two |
+| 3 | Three |
+| 4 | Four |
+| 5 | Five |
+| 6 | Six |
+| 7 | Seven |
+| 8 | Eight |
+| 9 | Niner |
 
-**Count:** 33 letters
+## 🔤 Russian phonetic alphabet
 
-| Letter | Word | Letter | Word |
-|-------|-------|-------|-------|
-| А | Анна | П | Павел |
-| Б | Борис | Р | Роман |
-| В | Василий | С | Семён |
-| Г | Григорий | Т | Татьяна |
-| Д | Дмитрий | У | Ульяна |
-| Е | Елена | Ф | Фёдор |
-| Ж | Женя | Х | Харитон |
-| З | Зинаида | Ц | Цапля |
-| И | Иван | Ч | Человек |
-| Й | Иван краткий | Ш | Шура |
-| К | Константин | Щ | Щука |
-| Л | Леонид | Ы | Еры |
-| М | Михаил | Ь | Мягкий знак |
-| Н | Николай | Э | Эхо |
-| О | Ольга | Ю | Юрий |
-| | | Я | Яков |
+`RUSSIAN_PHONETIC` · 31
 
----
+| Code | Meaning |
+| --- | --- |
+| A | Анна |
+| Б | Борис |
+| В | Василий |
+| Г | Григорий |
+| Д | Дмитрий |
+| Е | Елена |
+| Ж | Женя |
+| З | Зинаида |
+| И | Иван |
+| Й | Иван краткий |
+| К | Константин |
+| Л | Леонид |
+| М | Михаил |
+| Н | Николай |
+| О | Ольга |
+| П | Павел |
+| Р | Роман |
+| С | Семён |
+| Т | Татьяна |
+| У | Ульяна |
+| Ф | Фёдор |
+| Х | Харитон |
+| Ц | Цапля |
+| Ч | Человек |
+| Ш | Шура |
+| Щ | Щука |
+| Ы | Еры |
+| Ь | Мягкий знак |
+| Э | Эхо |
+| Ю | Юрий |
+| Я | Яков |
 
-## 📈 Support Statistics
+## 🔤 Morse alphabets and ambiguous signs
 
-| Category | Count |
-|-----------|------------|
-| Q codes | 60+ |
-| Y codes | 26 |
-| Z codes | 29 |
-| Prosigns | 12 |
-| CW abbreviations | 25 |
-| Russian Shch codes | 3 |
-| Russian abbreviations | 7 |
-| Soviet codes | 12 |
-| INTERCO maritime codes | 16 |
-| Weather codes | 9 |
-| SINPO parameters | 5 |
-| Priority levels | 4 |
-| Service signals | 4 |
-| International phonetic alphabet | 36 |
-| Russian phonetic alphabet | 33 |
-| **TOTAL** | **280+** |
+Exact EN/RU tables and `PROSIGNS_MORSE` are in [morse_decoder.py](../modules/morse_decoder.py). They cover Latin and Russian letters, digits, and punctuation. Prosigns are checked before ordinary characters, so a shared pattern can render as `<AR>`, `<BT>`, `<KN>`, or `<AS>` instead of punctuation. The current `..-.` → `<INT>` mapping also overrides F/Ф. This is an implementation limitation, not a universal alphabet definition. Unknown patterns render as `□`.
 
----
-
-## 🔍 Recognition Features
-
-### Fuzzy Matching
-
-The detector can use fuzzy matching to compensate for decoding errors:
-- Allows one or two errors in a code.
-- Takes message context into account.
-- Computes a confidence level.
-
-**Examples from the original reference:**
-- `QRZ` may be recognized from `QR?`, `?RZ`, or `QBZ`.
-- `SK` may be recognized from `S?` or `?K`.
-
-### Language Handling
-
-The original reference describes analyzing English and Russian renderings and choosing the one with fewer errors. Current automatic tuning selects its working text by length, with Russian chosen on a tie, and uses the English rendering for code analysis. Neither method verifies the language semantically.
-
-### Structural Analysis
-
-The presence of characteristic codes is used to classify a message:
-- **Procedural command**: contains Z/Y codes.
-- **Operational message**: contains Q codes.
-- **Emergency**: contains SOS or MAYDAY.
-- **General communication**: contains callsigns and prosigns.
-
----
-
-## 📚 Sources and Standards
-
-- **ITU-R M.1172**: international Q codes.
-- **ACP-131**: procedural communication signals (Z codes).
-- **ICAO Annex 10**: aeronautical telecommunications.
-- **IMO INTERCO**: International Code of Signals.
-- **Russian radio communication standards**: Shch codes and procedures.
-
----
-
-## 🔧 Python Usage
-
-```python
-from modules.procedural_codes import ProceduralCodeDetector
-
-# Create a detector with fuzzy matching enabled
-detector = ProceduralCodeDetector(use_fuzzy_matching=True, max_errors=1)
-
-# Analyze the text
-detected = detector.detect_codes("CQ CQ DE R1ABC QRZ K")
-
-# Display the analysis in English
-print(detector.format_analysis(detected, language='en'))
-```
-
-**Illustrative output translated from the original reference:**
-```
-======================================================================
-PROCEDURAL CODE AND COMMAND ANALYSIS
-======================================================================
-
-📋 MESSAGE STRUCTURE:
-   Type: General communication
-   Has start: ✓
-   Has end: ✗
-   Has callsigns: ✓
-
-📡 DETECTED CALLSIGNS:
-   • R1ABC
-
-🔧 PROCEDURAL SIGNS (PROSIGNS):
-   • K — Transmitting (-•-)
-
-🔤 Q CODES (International):
-   • QRZ — Who is calling me?
-
-📝 CW ABBREVIATIONS:
-   • CQ — General call
-   • DE — From
-```
-
----
-
-## 📄 Update History
-
-### v2.0 (06.01.2026)
-- Expanded the Q code list: 31 → 60+.
-- Added Y codes (26 aviation codes).
-- Added the international phonetic alphabet (36 characters).
-- Added INTERCO maritime codes (16 codes).
-- Added weather codes (9 codes).
-- Added SINPO codes (5 parameters).
-- Added Soviet procedural codes (12 codes).
-- Replaced "military" with "procedural" throughout the descriptions.
-
-### v1.0 (05.01.2026)
-- Basic Q code support (31).
-- Z codes (29).
-- ✅ Prosigns (12)
-- CW abbreviations (25).
-- Russian codes (10).
-- Fuzzy matching.
-
----
-
-The original inventory summarizes support as **280+ codes** across **14 categories**, with automatic recognition and fuzzy matching.
+The text detector recognizes joined signs tagged as `<AR>`; plain `AR` can match a CW abbreviation. Not all 11 dictionary prosign names have distinct audio-decoder outputs: some are aliases.

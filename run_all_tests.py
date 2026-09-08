@@ -1,6 +1,6 @@
 """
 Запуск всех тестов и генерация отчёта
-Результаты сохраняются в reports/test_results.txt
+Результаты сохраняются в reports/test_results_<timestamp>.txt и test_results_latest.txt
 
 Автор: Антон Зеленов (tixset@gmail.com)
 GitHub: https://github.com/tixset/MorseDecoder
@@ -20,34 +20,11 @@ def run_all_tests():
     # Добавляем текущую директорию в путь
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     
-    # Список всех тестовых модулей
-    test_modules = [
-        'tests.test_audio_input',
-        'tests.test_cli_language',
-        'tests.test_noisy_cw',
-        'tests.test_morse_timing',
-        'tests.test_morse_decoder',
-        'tests.test_auto_tune',
-        'tests.test_signal_analyzer',
-        'tests.test_fuzzy_matcher',
-        'tests.test_procedural_codes',
-    ]
-    
-    # Создаём набор всех тестов
+    # discovery включает новые модули и учитывает ошибки импорта как ошибки тестов.
+    root = os.path.dirname(os.path.abspath(__file__))
     loader = unittest.TestLoader()
-    suite = unittest.TestSuite()
-    
-    for module_name in test_modules:
-        try:
-            # Импортируем модуль
-            module = __import__(module_name, fromlist=[''])
-            # Загружаем тесты из модуля
-            module_suite = loader.loadTestsFromModule(module)
-            suite.addTests(module_suite)
-            print(f"✓ Загружен модуль: {module_name}")
-        except Exception as e:
-            print(f"✗ Ошибка загрузки {module_name}: {e}")
-    
+    suite = loader.discover(os.path.join(root, 'tests'), top_level_dir=root)
+
     # Запускаем тесты с перехватом вывода
     print("\n" + "=" * 80)
     print("ЗАПУСК ВСЕХ ТЕСТОВ")
@@ -91,18 +68,22 @@ def generate_report(result, duration, test_output):
     report.append(f"Время выполнения: {duration:.2f} секунд")
     report.append("")
     
+    # Пропуски и ожидаемые/неожиданные исходы не считаются обычным успехом.
+    passed = (result.testsRun - len(result.failures) - len(result.errors)
+              - len(result.skipped) - len(result.expectedFailures)
+              - len(result.unexpectedSuccesses))
     # Общая статистика
     report.append("ОБЩАЯ СТАТИСТИКА")
     report.append("-" * 80)
     report.append(f"Всего тестов:     {result.testsRun}")
-    report.append(f"Успешно:          {result.testsRun - len(result.failures) - len(result.errors)}")
+    report.append(f"Успешно:          {passed}")
     report.append(f"Провалено:        {len(result.failures)}")
     report.append(f"Ошибки:           {len(result.errors)}")
     report.append(f"Пропущено:        {len(result.skipped)}")
     
     # Процент успеха
     if result.testsRun > 0:
-        success_rate = ((result.testsRun - len(result.failures) - len(result.errors)) / result.testsRun) * 100
+        success_rate = ((passed) / result.testsRun) * 100
         report.append(f"Процент успеха:   {success_rate:.1f}%")
     
     report.append("")
@@ -157,7 +138,7 @@ def save_report(report):
     
     print(f"\n✓ Отчёт сохранён: {filepath}")
     
-    # Также создаём симлинк на последний результат
+    # Также сохраняем копию последнего результата
     latest_filepath = os.path.join(reports_dir, "test_results_latest.txt")
     try:
         if os.path.exists(latest_filepath):

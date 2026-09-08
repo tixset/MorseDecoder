@@ -1,6 +1,6 @@
 # Pull Request
 
-**Русский** | [English](PULL_REQUEST_TEMPLATE.en.md)
+[![Русский](https://img.shields.io/badge/Language-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-blue)](PULL_REQUEST_TEMPLATE.md) [![English](https://img.shields.io/badge/Language-English-lightgrey)](PULL_REQUEST_TEMPLATE/english.md)
 
 ## Описание изменений
 Краткое описание того, что делает этот PR.
@@ -22,15 +22,15 @@ Fixes #(issue_number)
 Опишите тесты, которые вы выполнили:
 
 - [ ] Протестировано на образцах WAV файлов
-- [ ] Проверена работа всех режимов (auto/batch/decode)
-- [ ] Запущены существующие тесты (`python run_tests.py`)
+- [ ] Проверена работа всех режимов (auto/batch/decode/multi/experiment)
+- [ ] Запущены существующие тесты (`python run_all_tests.py`)
 - [ ] Добавлены новые тесты для новой функциональности
 
 ## Чеклист
 
 - [ ] Код соответствует PEP 8 style guide
 - [ ] Добавлены/обновлены docstrings для новых функций
-- [ ] Обновлена документация (README.md, docs/)
+- [ ] Обновлены обе языковые версии документации (README.md, docs/)
 - [ ] Обновлён CHANGELOG.md
 - [ ] Коммиты следуют Conventional Commits (feat:, fix:, docs:)
 - [ ] Нет конфликтов с основной веткой (main)

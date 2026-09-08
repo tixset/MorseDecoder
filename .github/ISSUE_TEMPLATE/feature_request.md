@@ -1,12 +1,12 @@
 ---
-name: Feature request
+name: Предложение (Русский)
 about: Предложить новую функцию или улучшение
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''
 ---
 
-**Русский** | [English](feature_request.en.md)
+[![Русский](https://img.shields.io/badge/Language-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-blue)](feature_request.md) [![English](https://img.shields.io/badge/Language-English-lightgrey)](feature_request.en.md)
 
 ## Описание функции
 Краткое и понятное описание того, что вы хотите добавить.

@@ -3,7 +3,6 @@
 """
 import os
 from pathlib import Path
-from pydub import AudioSegment
 import subprocess
 
 def convert_mp3_to_wav(mp3_file, wav_file, target_rate=8000):
@@ -16,6 +15,8 @@ def convert_mp3_to_wav(mp3_file, wav_file, target_rate=8000):
         target_rate: целевая частота дискретизации
     """
     try:
+        # Необязательный импорт: при его ошибке доступен FFmpeg.
+        from pydub import AudioSegment
         # Попытка через pydub
         audio = AudioSegment.from_mp3(mp3_file)
         audio = audio.set_channels(1)  # mono
@@ -116,7 +117,7 @@ if __name__ == "__main__":
         print("✅ ffmpeg найден")
     except:
         print("⚠️  ffmpeg не найден. Установите: https://ffmpeg.org/download.html")
-        print("   Или: pip install pydub")
+        print("   Для чтения MP3 через pydub также требуется FFmpeg.")
     
     batch_convert_mp3_to_wav(
         folder=args.folder,

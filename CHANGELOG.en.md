@@ -1,12 +1,32 @@
 # Changelog
 
-[Русский](CHANGELOG.md) | **English**
+[![Русский](https://img.shields.io/badge/Language-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-lightgrey)](CHANGELOG.md) [![English](https://img.shields.io/badge/Language-English-blue)](CHANGELOG.en.md)
 
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 This is a translation of the release history. Performance figures, file sizes, and implementation descriptions below refer to the releases in which they were recorded.
+
+## [Unreleased]
+
+### Added and changed
+
+- English CLI by default, with `--ru` before/after the subcommand; Russian messages retained.
+- Shared WAV/MP3/OGG input, FFmpeg conversion, and temporary-file cleanup.
+- Carrier detection, narrow-band noisy CW processing, dot/dash timing estimates, and WPM reliability checks.
+- Heuristic metrics without accuracy claims; a noisy reference recording and regression tests.
+- `requirements.txt` for Python dependency installation.
+- Current Russian and English guides covering CLI, output formats, dictionaries, API, structure, and limitations; shields.io language navigation.
+- English PR template moved to `.github/PULL_REQUEST_TEMPLATE/english.md`.
+
+### Fixed
+
+- Tests are discovered automatically; import errors are no longer ignored, and skips are not counted as passed tests.
+- The MP3 converter can use FFmpeg even when pydub is unavailable.
+- Documentation links to removed files, obsolete commands, and incorrect dictionary counts.
+
+Entries below describe past releases. Their performance measurements and old file inventories do not describe the current checkout.
 
 ## [1.1.0] - 2026-01-07
 
