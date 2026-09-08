@@ -1,10 +1,13 @@
 """
 Автоматический подбор параметров для оптимального декодирования
 """
+from .console_i18n import console_text as _, set_console_language, get_console_language
+
 import sys
 import json
 from pathlib import Path
 from .morse_decoder import MorseDecoder
+from .audio_input import AudioLoadError, prepared_audio
 from .procedural_codes import ProceduralCodeDetector
 import itertools
 from multiprocessing import Pool, cpu_count
@@ -47,10 +50,10 @@ def calculate_quality_score(text, stats, codes_analysis):
     score -= question_ratio * 200  # максимальный штраф 200
     
     # 3. Бонус за распознанные коды
-    score += total_codes * 10  # по 10 баллов за каждый код
+    score += min(total_codes, 3) * 2  # ограниченный бонус: совпадение по шаблону не подтверждает расшифровку
     
     # 4. Бонус за позывные
-    score += len(codes_analysis.get('callsigns', [])) * 5
+    score += min(len(codes_analysis.get('callsigns', [])), 2)
     
     # 5. WPM должен быть в разумных пределах (5-40)
     wpm = stats.get('wpm', 0)
@@ -59,6 +62,8 @@ def calculate_quality_score(text, stats, codes_analysis):
     else:
         score -= 30
     
+    if 'timing' in stats:
+        score -= 1000 * (1 - stats['timing']['fit_ratio'])
     return score
 
 def _test_params_wrapper(args):
@@ -120,6 +125,17 @@ def test_parameter_combination(filepath, pulse_p, dot_dash_p, char_p, word_p, ve
         return None
 
 def auto_tune_parameters(filepath, mode='fast', lookup_callsigns=False):
+    """Convert once and validate input before testing parameter combinations."""
+    try:
+        with prepared_audio(filepath) as audio_path:
+            MorseDecoder().load_audio(audio_path)
+            return _auto_tune_parameters(filepath, mode, lookup_callsigns, audio_path)
+    except AudioLoadError as exc:
+        print(_('❌ Ошибка: {0}', str(exc)))
+        return None
+
+
+def _auto_tune_parameters(filepath, mode, lookup_callsigns, audio_path):
     """
     Автоматический подбор параметров
     
@@ -133,10 +149,10 @@ def auto_tune_parameters(filepath, mode='fast', lookup_callsigns=False):
     filepath = Path(filepath)
     
     print("="*80)
-    print("🎛️  АВТОМАТИЧЕСКИЙ ПОДБОР ПАРАМЕТРОВ")
+    print(_('🎛️  АВТОМАТИЧЕСКИЙ ПОДБОР ПАРАМЕТРОВ'))
     print("="*80)
-    print(f"Файл: {filepath.name}")
-    print(f"Режим: {mode.upper()}")
+    print(_('Файл: {0}', filepath.name))
+    print(_('Режим: {0}', mode.upper()))
     print()
     
     # Определяем диапазоны параметров в зависимости от режима
@@ -168,14 +184,14 @@ def auto_tune_parameters(filepath, mode='fast', lookup_callsigns=False):
     ))
     
     total = len(combinations)
-    print(f"🔬 Тестирование {total} комбинаций параметров...")
+    print(_('🔬 Тестирование {0} комбинаций параметров...', total))
     
     # Определяем количество воркеров (по умолчанию все ядра)
     workers = cpu_count()
     use_parallel = mode in ['thorough', 'extreme'] and total > 50
     
     if use_parallel:
-        print(f"⚡ Параллельная обработка на {workers} ядрах")
+        print(_('⚡ Параллельная обработка на {0} ядрах', workers))
     print()
     
     best_score = -float('inf')
@@ -183,33 +199,34 @@ def auto_tune_parameters(filepath, mode='fast', lookup_callsigns=False):
     
     # Подготовка аргументов для параллельной обработки
     verbose_flag = (mode == 'extreme')
-    args_list = [(filepath, p, d, c, w, False) for p, d, c, w in combinations]
+    args_list = [(audio_path, p, d, c, w, False) for p, d, c, w in combinations]
     
     # Параллельная или последовательная обработка
     if use_parallel:
         # Используем multiprocessing Pool
-        with Pool(workers) as pool:
+        with Pool(workers, initializer=set_console_language,
+                  initargs=(get_console_language(),)) as pool:
             if HAS_TQDM:
                 results = list(tqdm(
                     pool.imap(_test_params_wrapper, args_list),
                     total=total,
-                    desc="Подбор параметров",
-                    unit="комбинация"
+                    desc=_('Подбор параметров'),
+                    unit=_('комбинация')
                 ))
             else:
                 results = []
                 for i, result in enumerate(pool.imap(_test_params_wrapper, args_list), 1):
                     results.append(result)
                     if i % max(1, total // 10) == 0:
-                        print(f"Прогресс: {i}/{total} ({i*100//total}%)")
+                        print(_('Прогресс: {0}/{1} ({2}%)', i, total, i * 100 // total))
     else:
         # Последовательная обработка для fast режима
         results = []
-        iterator = tqdm(args_list, desc="Подбор параметров", unit="комб") if HAS_TQDM else args_list
+        iterator = tqdm(args_list, desc=_('Подбор параметров'), unit=_('комб')) if HAS_TQDM else args_list
         
         for i, args in enumerate(iterator, 1):
             if not HAS_TQDM and i % max(1, total // 10) == 0:
-                print(f"Прогресс: {i}/{total} ({i*100//total}%)")
+                print(_('Прогресс: {0}/{1} ({2}%)', i, total, i * 100 // total))
             
             result = _test_params_wrapper(args)
             results.append(result)
@@ -221,32 +238,38 @@ def auto_tune_parameters(filepath, mode='fast', lookup_callsigns=False):
             best_result = result
     
     print()
-    print("="*80)
-    print("✅ ОПТИМАЛЬНЫЕ ПАРАМЕТРЫ НАЙДЕНЫ")
-    print("="*80)
-    
     if best_result:
+        print("="*80)
+        print(_('✅ ЛУЧШИЕ ПАРАМЕТРЫ СРЕДИ ПРОВЕРЕННЫХ КОМБИНАЦИЙ'))
+        print("="*80)
+        print(_('⚠️ Точность расшифровки не подтверждена. Позывные — кандидаты, а не подтверждённые станции.'))
+        if not best_result['stats'].get('timing', {}).get('reliable', False):
+            print(_('⚠️ Длительности импульсов не соответствуют устойчивой модели точек и тире. Результат ненадёжен.'))
         params = best_result['params']
-        print(f"\n📊 Параметры:")
+        print(_('\n📊 Параметры:'))
         print(f"   Pulse Detection:    {params['pulse']}")
         print(f"   Dot-Dash Gap:       {params['dot_dash']}")
         print(f"   Character Gap:      {params['char']}")
         print(f"   Word Gap:           {params['word']}")
         
-        print(f"\n📈 Метрики:")
-        print(f"   Оценка качества:    {best_result['score']:.1f}")
-        print(f"   Скорость:           {best_result['stats'].get('wpm', 0):.1f} WPM")
-        print(f"   Символов:           {len(best_result['text'])}")
-        print(f"   Ошибок (□):         {best_result['text'].count('□')} ({best_result['question_ratio']*100:.1f}%)")
-        print(f"   Позывных:           {len(best_result['codes'].get('callsigns', []))}")
+        print(_('   Несущая частота: {0:.1f} Гц', best_result['stats'].get('carrier_frequency') or 0))
+        print(_('\n📈 Метрики:'))
+        print(_('   Эвристическая оценка: {0:.1f}', best_result['score']))
+        if best_result['stats'].get('wpm', 0):
+            print(_('   Скорость:           {0:.1f} WPM', best_result['stats']['wpm']))
+        else:
+            print(_('   Скорость: неизвестна — нестабильные длительности импульсов'))
+        print(_('   Символов:           {0}', len(best_result['text'])))
+        print(_('   Нераспознано (□):   {0} ({1:.1f}%)', best_result['text'].count('□'), best_result['question_ratio'] * 100))
+        print(_('   Позывных:           {0}', len(best_result['codes'].get('callsigns', []))))
         
-        print(f"\n📝 Расшифрованный текст (EN):")
+        print(_('\n📝 Расшифрованный текст (EN):'))
         print(f"{best_result['text_en'][:200]}{'...' if len(best_result['text_en']) > 200 else ''}")
-        print(f"\n📝 Расшифрованный текст (RU):")
+        print(_('\n📝 Расшифрованный текст (RU):'))
         print(f"{best_result['text_ru'][:200]}{'...' if len(best_result['text_ru']) > 200 else ''}")
         
         if best_result['codes'].get('callsigns'):
-            print(f"\n📡 Обнаруженные позывные:")
+            print(_('\n📡 Кандидаты в позывные:'))
             for call_data in best_result['codes']['callsigns'][:10]:
                 call = call_data if isinstance(call_data, str) else call_data.get('callsign', '')
                 if call:
@@ -259,7 +282,7 @@ def auto_tune_parameters(filepath, mode='fast', lookup_callsigns=False):
         
         return best_result
     else:
-        print("❌ Не удалось найти подходящие параметры")
+        print(_('❌ Не удалось найти подходящие параметры'))
         return None
 
 def save_results(audio_filepath, result, params, lookup_callsigns=False):
@@ -281,7 +304,7 @@ def save_results(audio_filepath, result, params, lookup_callsigns=False):
     # Поиск информации о позывных если запрошено
     callsign_info = {}
     if lookup_callsigns and result['codes'].get('callsigns'):
-        print(f"\n🔍 Поиск информации о {len(result['codes']['callsigns'])} позывных...")
+        print(_('\n🔍 Поиск информации о {0} позывных...', len(result['codes']['callsigns'])))
         lookup = CallsignLookup()
         for callsign_data in result['codes']['callsigns']:
             # callsign может быть строкой или dict
@@ -293,7 +316,7 @@ def save_results(audio_filepath, result, params, lookup_callsigns=False):
                 callsign_info[callsign] = info
                 print(f"   ✅ {callsign}: {info.get('country', 'Unknown')}")
             else:
-                print(f"   ⚪ {callsign}: информация не найдена")
+                print(_('   ⚪ {0}: информация не найдена', callsign))
     
     # Сохранение расшифровки в .txt
     txt_path = base_path.with_suffix('.txt')
@@ -307,11 +330,17 @@ def save_results(audio_filepath, result, params, lookup_callsigns=False):
         f.write(f"Файл:           {audio_path.name}\n")
         f.write(f"Дата декодир.:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Длительность:   {result['stats'].get('duration', 0):.1f} сек\n")
-        f.write(f"Скорость:       {result['stats'].get('wpm', 0):.1f} WPM\n")
-        f.write(f"Качество:       {100 - result['question_ratio']*100:.1f}% (ошибок: {result['question_ratio']*100:.1f}%)\n")
+        speed = result['stats'].get('wpm', 0)
+        f.write(f"Скорость:       {speed:.1f} WPM\n" if speed else "Скорость:       неизвестна\n")
+        f.write(f"Распознано символов: {100 - result['question_ratio']*100:.1f}% (нераспознано: {result['question_ratio']*100:.1f}%)\n")
         f.write(f"Язык:           AUTO\n")
         f.write(f"Символов:       {len(result['text'])}\n\n")
         
+        f.write("Точность расшифровки не подтверждена. Доля распознанных символов не является точностью.\n")
+        if not result['stats'].get('timing', {}).get('reliable', False):
+            f.write("ВНИМАНИЕ: нестабильные длительности импульсов. Скорость неизвестна; результат ненадёжен.\n")
+        f.write("Позывные являются кандидатами, найденными по шаблону.\n\n")
+
         # Обнаруженные элементы
         f.write("## ОБНАРУЖЕННЫЕ ЭЛЕМЕНТЫ\n\n")
         
@@ -354,7 +383,8 @@ def save_results(audio_filepath, result, params, lookup_callsigns=False):
         f.write(f"Порог импульса:        {params['pulse']}\n")
         f.write(f"Обнаружено импульсов:  {result['stats'].get('pulses', 0)}\n")
         f.write(f"Метод декодирования:   Адаптивный (auto-tune)\n")
-        f.write(f"Частотный фильтр:      400-1200 Hz\n")
+        band = result['stats'].get('frequency_band', [400, 1200])
+        f.write(f"Частотный фильтр:      {band[0]:.1f}-{band[1]:.1f} Hz\n")
         f.write(f"Оценка качества:       {result['score']:.1f}\n\n")
         
         f.write("Параметры gap-detection:\n")
@@ -396,12 +426,15 @@ def save_results(audio_filepath, result, params, lookup_callsigns=False):
             skill = signal_analysis.get('operator_skill', {})
             f.write("👤 МАСТЕРСТВО ОПЕРАТОРА\n")
             f.write("-"*80 + "\n")
-            f.write(f"  Уровень:             {skill.get('skill_level', 'N/A')}\n")
-            f.write(f"  Общая оценка:        {skill.get('skill_score', 0):.1f}/100\n")
-            f.write(f"  Стабильность тайминга: {skill.get('timing_stability', 0):.1f}/100\n")
-            f.write(f"  Консистентность ритма: {skill.get('rhythm_consistency', 0):.1f}/100\n")
-            f.write(f"  Точка/Тире (ratio):  {skill.get('dot_dash_ratio', 0):.2f} (идеал: 3.0)\n")
-            f.write(f"  Вариация:            {skill.get('variance_score', 0):.1f}/100\n\n")
+            if skill.get('skill_level') == 'UNKNOWN':
+                f.write("  Недостаточно надёжных данных для оценки оператора.\n\n")
+            else:
+                f.write(f"  Уровень:             {skill.get('skill_level', 'N/A')}\n")
+                f.write(f"  Общая оценка:        {skill.get('skill_score', 0):.1f}/100\n")
+                f.write(f"  Стабильность тайминга: {skill.get('timing_stability', 0):.1f}/100\n")
+                f.write(f"  Консистентность ритма: {skill.get('rhythm_consistency', 0):.1f}/100\n")
+                f.write(f"  Точка/Тире (ratio):  {skill.get('dot_dash_ratio', 0):.2f} (идеал: 3.0)\n")
+                f.write(f"  Вариация:            {skill.get('variance_score', 0):.1f}/100\n\n")
             
             # Интерпретация результатов
             f.write("📊 ИНТЕРПРЕТАЦИЯ\n")
@@ -508,13 +541,14 @@ def save_results(audio_filepath, result, params, lookup_callsigns=False):
                     f.write(f"  • {abbr}\n")
             f.write("\n")
     
-    print(f"\n💾 Расшифровка сохранена: {txt_path}")
+    print(_('\n💾 Расшифровка сохранена: {0}', txt_path))
     
     # Сохранение конфига параметров в .json
     config_path = base_path.with_suffix('.config.json')
     config = {
         'audio_file': audio_path.name,
         'parameters': {
+            'auto_frequency': result['stats'].get('auto_frequency', True),
             'pulse_percentile': params['pulse'],
             'gap_percentile_dot_dash': params['dot_dash'],
             'gap_percentile_char': params['char'],
@@ -522,6 +556,9 @@ def save_results(audio_filepath, result, params, lookup_callsigns=False):
         },
         'quality_metrics': {
             'score': result['score'],
+            'score_type': 'heuristic',
+            'transcription_verified': False,
+            'timing_reliable': result['stats'].get('timing', {}).get('reliable', False),
             'wpm': result['stats'].get('wpm', 0),
             'text_length': len(result['text']),
             'error_count': result['text'].count('□'),  # нераспознанные символы
@@ -533,12 +570,12 @@ def save_results(audio_filepath, result, params, lookup_callsigns=False):
     with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
     
-    print(f"💾 Конфигурация сохранена: {config_path}\n")
+    print(_('💾 Конфигурация сохранена: {0}\n', config_path))
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Использование: python auto_tune.py <файл.wav> [режим]")
-        print("Режимы: fast (по умолчанию), thorough, extreme")
+        print(_('Использование: python auto_tune.py <файл.wav> [режим]'))
+        print(_('Режимы: fast (по умолчанию), thorough, extreme'))
         sys.exit(1)
     
     filepath = sys.argv[1]

@@ -2,6 +2,8 @@
 Модуль для поиска информации о радиолюбительских позывных
 Использует API различных сервисов для получения данных о станциях
 """
+from .console_i18n import console_text as _
+
 import requests
 import json
 from pathlib import Path
@@ -337,7 +339,7 @@ class CallsignLookup:
                 f.write("\n")
                 
         except Exception as e:
-            print(f"⚠️  Ошибка сохранения информации о {callsign}: {e}")
+            print(_('⚠️  Ошибка сохранения информации о {0}: {1}', callsign, e))
 
 
 def batch_lookup_callsigns(callsigns, output_file="callsigns_info.txt", delay=1.0):
@@ -354,8 +356,8 @@ def batch_lookup_callsigns(callsigns, output_file="callsigns_info.txt", delay=1.
     # Очистка файла
     Path(output_file).write_text("", encoding='utf-8')
     
-    print(f"\n🔍 Поиск информации о {len(callsigns)} позывных...")
-    print(f"💾 Результаты будут сохранены в: {output_file}\n")
+    print(_('\n🔍 Поиск информации о {0} позывных...', len(callsigns)))
+    print(_('💾 Результаты будут сохранены в: {0}\n', output_file))
     
     found_count = 0
     for idx, callsign in enumerate(callsigns, 1):
@@ -368,12 +370,12 @@ def batch_lookup_callsigns(callsigns, output_file="callsigns_info.txt", delay=1.
             print(f"✅ {info.get('country', 'Unknown')}")
             found_count += 1
         else:
-            print("❌ Не найден")
+            print(_('❌ Не найден'))
         
         # Задержка между запросами (чтобы не перегружать API)
         if idx < len(callsigns) and not info.get('from_cache'):
             time.sleep(delay)
     
-    print(f"\n✅ Обработано: {len(callsigns)}")
-    print(f"📡 Найдено: {found_count} ({found_count/len(callsigns)*100:.1f}%)")
-    print(f"💾 Результаты: {output_file}")
+    print(_('\n✅ Обработано: {0}', len(callsigns)))
+    print(_('📡 Найдено: {0} ({1:.1f}%)', found_count, found_count / len(callsigns) * 100))
+    print(_('💾 Результаты: {0}', output_file))

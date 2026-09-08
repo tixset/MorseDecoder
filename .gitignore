@@ -18,6 +18,7 @@ TrainingData/
 *.mp3
 *.ogg
 *.txt
+!requirements.txt
 *.config.json
 *.multi.json
 *.multi.txt
@@ -62,3 +63,6 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Regression recording with a user-provided transcription
+!tests/fixtures/noisy_cw.mp3

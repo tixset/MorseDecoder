@@ -16,7 +16,8 @@ class TestAutoTune(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Создание тестового WAV файла"""
-        cls.temp_dir = tempfile.mkdtemp()
+        cls.temp_directory = tempfile.TemporaryDirectory()
+        cls.temp_dir = cls.temp_directory.name
         cls.test_wav = os.path.join(cls.temp_dir, "test.wav")
         
         # Создаём простой тестовый WAV файл (1 секунда, 8kHz)
@@ -28,9 +29,7 @@ class TestAutoTune(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Удаление тестового файла"""
-        if os.path.exists(cls.test_wav):
-            os.remove(cls.test_wav)
-        os.rmdir(cls.temp_dir)
+        cls.temp_directory.cleanup()
     
     def test_auto_tune_modes(self):
         """Тест доступности всех режимов"""

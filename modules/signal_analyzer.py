@@ -128,7 +128,7 @@ class SignalAnalyzer:
             'purity_score': float(purity_score)
         }
     
-    def analyze_operator_skill(self, pulses, gaps):
+    def analyze_operator_skill(self, pulses, gaps, signal_reliable=False):
         """
         Анализ мастерства оператора
         
@@ -179,6 +179,9 @@ class SignalAnalyzer:
             skill_level = 'INTERMEDIATE'
         else:
             skill_level = 'BEGINNER'
+
+        if not signal_reliable:
+            skill_level = 'UNKNOWN'
         
         return {
             'timing_stability': float(timing_stability),

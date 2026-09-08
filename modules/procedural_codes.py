@@ -3,6 +3,9 @@
 Основан на международных Q-кодах и военных Z-кодах (ACP-131)
 С поддержкой нечеткого поиска (fuzzy matching)
 """
+from functools import partial
+from .console_i18n import console_text
+
 import re
 from .fuzzy_matcher import smart_code_detection, fuzzy_match_callsign, contextual_code_enhancement
 from .code_dictionaries import (
@@ -348,7 +351,7 @@ class ProceduralCodeDetector:
         # Попытаемся найти позывные из склеенных соседних слов (для текстов с пробелами между буквами)
         detected['callsigns'].extend(self._find_spaced_callsigns(words))
         # Удаляем дубликаты
-        detected['callsigns'] = list(set(detected['callsigns']))
+        detected['callsigns'] = sorted(set(detected['callsigns']))
         
         return detected
     
@@ -542,112 +545,113 @@ class ProceduralCodeDetector:
         
         return structure
     
-    def format_analysis(self, detected):
+    def format_analysis(self, detected, language='ru'):
         """Форматированный вывод анализа"""
+        _ = partial(console_text, language=language)
         lines = []
-        lines.append("\n" + "="*70)
-        lines.append("АНАЛИЗ ПРОЦЕДУРНЫХ КОДОВ И КОМАНД")
-        lines.append("="*70)
-        
+        lines.append('\n' + '=' * 70)
+        lines.append(_('АНАЛИЗ ПРОЦЕДУРНЫХ КОДОВ И КОМАНД'))
+        lines.append('=' * 70)
+
         # Структура сообщения
         structure = detected['message_structure']
-        lines.append("\n📋 СТРУКТУРА СООБЩЕНИЯ:")
-        lines.append(f"   Тип: {self._type_name(structure['probable_type'])}")
-        lines.append(f"   Имеет начало: {'✓' if structure['has_start'] else '✗'}")
-        lines.append(f"   Имеет конец: {'✓' if structure['has_end'] else '✗'}")
-        lines.append(f"   Имеет позывные: {'✓' if structure['has_callsign'] else '✗'}")
-        
+        lines.append(_('\n📋 СТРУКТУРА СООБЩЕНИЯ:'))
+        lines.append(_('   Тип: {0}', _(self._type_name(structure['probable_type']))))
+        lines.append(_('   Имеет начало: {0}', '✓' if structure['has_start'] else '✗'))
+        lines.append(_('   Имеет конец: {0}', '✓' if structure['has_end'] else '✗'))
+        lines.append(_('   Имеет позывные: {0}', '✓' if structure['has_callsign'] else '✗'))
+
         # Позывные
         if detected['callsigns']:
-            lines.append("\n📡 ОБНАРУЖЕННЫЕ ПОЗЫВНЫЕ:")
+            lines.append(_('\n📡 ОБНАРУЖЕННЫЕ ПОЗЫВНЫЕ:'))
             for callsign in detected['callsigns']:
-                lines.append(f"   • {callsign}")
-        
+                lines.append(f'   • {callsign}')
+
         # Номер сообщения и CHECK
         if detected['message_number']:
-            lines.append(f"\n🔢 НОМЕР СООБЩЕНИЯ: {detected['message_number']}")
-        
+            lines.append(_('\n🔢 НОМЕР СООБЩЕНИЯ: {0}', detected['message_number']))
+
         if detected['check_field']:
-            lines.append(f"\n✓ CHECK: {detected['check_field']} групп(ы)")
-        
+            lines.append(_('\n✓ CHECK: {0} групп(ы)', detected['check_field']))
+
         # Уровень срочности
         if detected['urgency_level']:
-            lines.append("\n⚠️  УРОВЕНЬ СРОЧНОСТИ:")
+            lines.append(_('\n⚠️  УРОВЕНЬ СРОЧНОСТИ:'))
             urg = detected['urgency_level']
-            lines.append(f"   {urg['level']} — {urg['meaning']}")
-        
+            lines.append(f"   {urg['level']} — {_(urg['meaning'])}")
+
         # Prosigns
         if detected['prosigns']:
-            lines.append("\n🔧 ПРОЦЕДУРНЫЕ ЗНАКИ (PROSIGNS):")
+            lines.append(_('\n🔧 ПРОЦЕДУРНЫЕ ЗНАКИ (PROSIGNS):'))
             for item in detected['prosigns']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # Q-коды
         if detected['q_codes']:
-            lines.append("\n🔤 Q-КОДЫ (Международные):")
+            lines.append(_('\n🔤 Q-КОДЫ (Международные):'))
             for item in detected['q_codes']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # Y-коды
         if detected['y_codes']:
-            lines.append("\n✈️  Y-КОДЫ (Авиационные):")
+            lines.append(_('\n✈️  Y-КОДЫ (Авиационные):'))
             for item in detected['y_codes']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # Z-коды
         if detected['z_codes']:
-            lines.append("\n🎖️  Z-КОДЫ (Процедурные):")
+            lines.append(_('\n🎖️  Z-КОДЫ (Процедурные):'))
             for item in detected['z_codes']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # Щ-коды (российские)
         if detected['shch_codes']:
-            lines.append("\n🇷🇺 Щ-КОДЫ (Российские процедурные):")
+            lines.append(_('\n🇷🇺 Щ-КОДЫ (Российские процедурные):'))
             for item in detected['shch_codes']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # Российские процедурные сокращения
         if detected.get('ru_procedural_abbr'):
-            lines.append("\n📋 РОССИЙСКИЕ ПРОЦЕДУРНЫЕ СОКРАЩЕНИЯ:")
+            lines.append(_('\n📋 РОССИЙСКИЕ ПРОЦЕДУРНЫЕ СОКРАЩЕНИЯ:'))
             for item in detected['ru_procedural_abbr']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # Советские коды
         if detected.get('soviet_codes'):
-            lines.append("\n🚩 СОВЕТСКИЕ ПРОЦЕДУРНЫЕ КОДЫ:")
+            lines.append(_('\n🚩 СОВЕТСКИЕ ПРОЦЕДУРНЫЕ КОДЫ:'))
             for item in detected['soviet_codes']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # Морские коды
         if detected.get('maritime_codes'):
-            lines.append("\n⚓ МОРСКИЕ КОДЫ (INTERCO):")
+            lines.append(_('\n⚓ МОРСКИЕ КОДЫ (INTERCO):'))
             for item in detected['maritime_codes']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # Метеокоды
         if detected.get('meteo_codes'):
-            lines.append("\n🌦️  МЕТЕОРОЛОГИЧЕСКИЕ КОДЫ:")
+            lines.append(_('\n🌦️  МЕТЕОРОЛОГИЧЕСКИЕ КОДЫ:'))
             for item in detected['meteo_codes']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # SINPO коды
         if detected.get('sinpo_codes'):
-            lines.append("\n📊 SINPO КОДЫ (Оценка качества):")
+            lines.append(_('\n📊 SINPO КОДЫ (Оценка качества):'))
             for item in detected['sinpo_codes']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # CW-сокращения
         if detected['cw_abbreviations']:
-            lines.append("\n📝 CW-СОКРАЩЕНИЯ:")
+            lines.append(_('\n📝 CW-СОКРАЩЕНИЯ:'))
             for item in detected['cw_abbreviations']:
-                lines.append(f"   • {item['code']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+
         # Служебные сигналы
         if detected['service_signals']:
-            lines.append("\n🚨 СЛУЖЕБНЫЕ СИГНАЛЫ:")
+            lines.append(_('\n🚨 СЛУЖЕБНЫЕ СИГНАЛЫ:'))
             for item in detected['service_signals']:
-                lines.append(f"   • {item['signal']} — {item['meaning']}")
-        
+                lines.append(f"   • {item['signal']} — {_(item['meaning'])}")
+
         # Итог
         total_codes = (
             len(detected['q_codes']) + 
@@ -663,12 +667,12 @@ class ProceduralCodeDetector:
             len(detected['prosigns'])
         )
         if total_codes == 0:
-            lines.append("\n💬 Обычное сообщение без специальных кодов")
-        
-        lines.append("\n" + "="*70)
-        
+            lines.append(_('\n💬 Обычное сообщение без специальных кодов'))
+
+        lines.append('\n' + '=' * 70)
+
         return "\n".join(lines)
-    
+
     def _type_name(self, type_code):
         """Перевод типа сообщения"""
         types = {

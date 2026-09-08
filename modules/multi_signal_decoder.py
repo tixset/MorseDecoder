@@ -9,6 +9,8 @@
 - Амплитуде (громкости)
 """
 
+from .console_i18n import console_text as _, console_signal_warning
+
 import numpy as np
 from scipy import signal
 from scipy.fft import fft, fftfreq
@@ -193,24 +195,24 @@ class MultiSignalDecoder:
             ]
         """
         # Загружаем аудио с базовым декодером
-        base_decoder = MorseDecoder(sample_rate=self.sample_rate)
+        base_decoder = MorseDecoder(auto_frequency=False, sample_rate=self.sample_rate)
         audio, sample_rate = base_decoder.load_audio(filepath)
         
         # Автоматически определяем частотные диапазоны если нужно
         peak_info = None
         if self.auto_detect and self.frequency_bands is None:
             if verbose:
-                print("🔍 Автоматическое определение частотных диапазонов...")
+                print(_('🔍 Автоматическое определение частотных диапазонов...'))
             bands, peak_info = self.detect_frequency_peaks(audio, sample_rate, num_peaks=self.num_peaks)
             if verbose:
-                print(f"   Найдено частотных диапазонов: {len(bands)}")
+                print(_('   Найдено частотных диапазонов: {0}', len(bands)))
                 for i, (min_f, max_f) in enumerate(bands, 1):
-                    print(f"   {i}. {min_f}-{max_f} Hz (центр: {(min_f+max_f)/2:.0f} Hz)")
+                    print(_('   {0}. {1}-{2} Hz (центр: {3:.0f} Hz)', i, min_f, max_f, (min_f + max_f) / 2))
                 
                 # Выводим предупреждение если это похоже на одиночный сигнал
                 if peak_info and peak_info.get('is_single_signal'):
-                    print(f"\n⚠️  {peak_info.get('warning', 'Возможно это одиночный сигнал')}")
-                    print(f"   💡 Рекомендуется использовать обычное декодирование: morse_cli.py auto <file>")
+                    print(_('\n⚠️  {0}', console_signal_warning(peak_info.get('warning') or 'Возможно это одиночный сигнал')))
+                    print(_('   💡 Рекомендуется использовать обычное декодирование: morse_cli.py auto <file>'))
         else:
             bands = self.frequency_bands or [(400, 1200)]
             peak_info = None
@@ -220,13 +222,13 @@ class MultiSignalDecoder:
         
         for band_idx, (min_freq, max_freq) in enumerate(bands, 1):
             if verbose:
-                print(f"\n📡 Обработка сигнала #{band_idx}: {min_freq}-{max_freq} Hz")
+                print(_('\n📡 Обработка сигнала #{0}: {1}-{2} Hz', band_idx, min_freq, max_freq))
             
             try:
                 if use_auto_tune:
                     # Используем auto-tune для подбора оптимальных параметров
                     if verbose:
-                        print(f"   🎛️  Автоподбор параметров...")
+                        print(_('   🎛️  Автоподбор параметров...'))
                     
                     # Быстрый режим: тестируем 12 комбинаций
                     pulse_range = [60, 70, 80]
@@ -244,7 +246,7 @@ class MultiSignalDecoder:
                     
                     for pulse_p, dot_dash_p, char_p, word_p in combinations:
                         # Создаем декодер с этими параметрами
-                        decoder = MorseDecoder(
+                        decoder = MorseDecoder(auto_frequency=False,
                             sample_rate=sample_rate,
                             min_freq=min_freq,
                             max_freq=max_freq,
@@ -294,7 +296,7 @@ class MultiSignalDecoder:
                     
                     if best_params is None or best_decoder_result is None:
                         if verbose:
-                            print(f"   ⚠️  Не удалось подобрать параметры")
+                            print(_('   ⚠️  Не удалось подобрать параметры'))
                         continue
                     
                     pulse_percentile, gap_dd, gap_char, gap_word = best_params
@@ -303,11 +305,11 @@ class MultiSignalDecoder:
                     envelope = best_decoder_result['envelope']
                     
                     if verbose:
-                        print(f"   ⚙️  Параметры: pulse={pulse_percentile}, dd={gap_dd}, char={gap_char}, word={gap_word}")
+                        print(_('   ⚙️  Параметры: pulse={0}, dd={1}, char={2}, word={3}', pulse_percentile, gap_dd, gap_char, gap_word))
                     
                 else:
                     # Используем заданные параметры
-                    decoder = MorseDecoder(
+                    decoder = MorseDecoder(auto_frequency=False,
                         sample_rate=sample_rate,
                         min_freq=min_freq,
                         max_freq=max_freq,
@@ -324,7 +326,7 @@ class MultiSignalDecoder:
                     
                     if not pulses:
                         if verbose:
-                            print(f"   ⚠️  Импульсы не обнаружены")
+                            print(_('   ⚠️  Импульсы не обнаружены'))
                         continue
                     
                     # Декодируем
@@ -333,14 +335,14 @@ class MultiSignalDecoder:
                     
                     if not text or len(text.strip()) < 3:
                         if verbose:
-                            print(f"   ⚠️  Текст слишком короткий")
+                            print(_('   ⚠️  Текст слишком короткий'))
                         continue
                 
                 # Оцениваем силу сигнала
                 signal_strength = np.max(envelope)
                 
                 # Создаем финальный декодер для оценки WPM
-                final_decoder = MorseDecoder(
+                final_decoder = MorseDecoder(auto_frequency=False,
                     sample_rate=sample_rate,
                     min_freq=min_freq,
                     max_freq=max_freq,
@@ -371,16 +373,16 @@ class MultiSignalDecoder:
                         }
                         
                         if verbose:
-                            print(f"   🔊 Модуляция: {modulation['type']} ({modulation['confidence']:.1f}% уверенность)")
-                            print(f"   ✨ Чистота: {purity['purity_score']:.1f}/100, SNR: {purity['snr_estimate']:.1f} dB")
-                            print(f"   👤 Оператор: {skill['skill_level']} ({skill['skill_score']:.1f}/100)")
+                            print(_('   🔊 Модуляция: {0} ({1:.1f}% уверенность)', modulation['type'], modulation['confidence']))
+                            print(_('   ✨ Чистота: {0:.1f}/100, SNR: {1:.1f} dB', purity['purity_score'], purity['snr_estimate']))
+                            print(_('   👤 Оператор: {0} ({1:.1f}/100)', skill['skill_level'], skill['skill_score']))
                     except Exception as e:
                         if verbose:
-                            print(f"   ⚠️  Аналитика недоступна: {e}")
+                            print(_('   ⚠️  Аналитика недоступна: {0}', e))
                 
                 if not text or len(text.strip()) < 3:
                     if verbose:
-                        print(f"   ⚠️  Текст слишком короткий")
+                        print(_('   ⚠️  Текст слишком короткий'))
                     continue
                 
                 # Оцениваем качество (процент не-ошибочных символов)
@@ -402,12 +404,12 @@ class MultiSignalDecoder:
                 results.append(result)
                 
                 if verbose:
-                    print(f"   ✅ WPM: {wpm}, Качество: {quality:.1f}%, Импульсов: {len(pulses)}")
+                    print(_('   ✅ WPM: {0}, Качество: {1:.1f}%, Импульсов: {2}', wpm, quality, len(pulses)))
                     print(f"   📝 {text[:100]}{'...' if len(text) > 100 else ''}")
                     
             except Exception as e:
                 if verbose:
-                    print(f"   ❌ Ошибка: {e}")
+                    print(_('   ❌ Ошибка: {0}', e))
                 continue
         
         # Сортируем результаты по качеству
@@ -439,11 +441,11 @@ class MultiSignalDecoder:
         min_wpm, max_wpm = wpm_range
         
         if verbose:
-            print(f"🔍 Поиск сигналов со скоростью {min_wpm}-{max_wpm} WPM")
-            print(f"   Частотный диапазон: {min_freq}-{max_freq} Hz")
+            print(_('🔍 Поиск сигналов со скоростью {0}-{1} WPM', min_wpm, max_wpm))
+            print(_('   Частотный диапазон: {0}-{1} Hz', min_freq, max_freq))
         
         # Загружаем аудио
-        decoder = MorseDecoder(sample_rate=self.sample_rate, min_freq=min_freq, max_freq=max_freq)
+        decoder = MorseDecoder(auto_frequency=False, sample_rate=self.sample_rate, min_freq=min_freq, max_freq=max_freq)
         audio, sample_rate = decoder.load_audio(filepath)
         
         results = []
@@ -457,7 +459,7 @@ class MultiSignalDecoder:
             gap_char = 80 + (target_wpm - min_wpm) / (max_wpm - min_wpm) * 15
             
             try:
-                test_decoder = MorseDecoder(
+                test_decoder = MorseDecoder(auto_frequency=False,
                     sample_rate=sample_rate,
                     min_freq=min_freq,
                     max_freq=max_freq,
@@ -510,9 +512,9 @@ class MultiSignalDecoder:
         unique_results.sort(key=lambda x: x['quality'], reverse=True)
         
         if verbose and unique_results:
-            print(f"\n✅ Найдено уникальных сигналов: {len(unique_results)}")
+            print(_('\n✅ Найдено уникальных сигналов: {0}', len(unique_results)))
             for i, r in enumerate(unique_results[:3], 1):
-                print(f"   {i}. WPM: {r['actual_wpm']}, Качество: {r['quality']:.1f}%")
+                print(_('   {0}. WPM: {1}, Качество: {2:.1f}%', i, r['actual_wpm'], r['quality']))
                 print(f"      {r['text'][:80]}...")
         
         return unique_results

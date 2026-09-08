@@ -4,6 +4,12 @@
 С анализом военных кодов и команд
 """
 
+from .console_i18n import console_text as _, get_console_language
+
+from .audio_input import AudioLoadError, prepared_audio
+from .morse_timing import estimate_timing
+from .cw_frontend import select_carrier, filter_carrier, smooth_envelope, detect_keying
+
 import numpy as np
 import scipy.io.wavfile as wavfile
 from scipy import signal
@@ -108,7 +114,7 @@ class MorseDecoder:
     def __init__(self, sample_rate=8000, min_freq=400, max_freq=1200,
                  pulse_percentile=85, gap_percentile_dot_dash=62,
                  gap_percentile_char=90, gap_percentile_word=92,
-                 use_cache=True):
+                 use_cache=True, auto_frequency=True):
         """
         Инициализация декодера
         
@@ -121,6 +127,8 @@ class MorseDecoder:
             gap_percentile_char: percentile для разделения символов (85-95)
             gap_percentile_word: percentile для разделения слов (90-98)
             use_cache: использовать кеширование результатов (по умолчанию True)
+            auto_frequency: автоматически выделять узкую полосу вокруг несущей;
+                False сохраняет заданную min_freq/max_freq полосу
         """
         self.target_sample_rate = sample_rate
         self.min_freq = min_freq
@@ -130,6 +138,9 @@ class MorseDecoder:
         self.gap_percentile_char = gap_percentile_char
         self.gap_percentile_word = gap_percentile_word
         self.use_cache = use_cache
+        self.auto_frequency = auto_frequency
+        self.carrier_frequency = None
+        self.filter_band = (min_freq, max_freq)
         
         # Предкомпиляция фильтра Butterworth для производительности
         self._filter_coefficients = None
@@ -147,7 +158,13 @@ class MorseDecoder:
     def load_audio(self, filepath):
         """Загрузка и предобработка аудио файла"""
         # Загрузка аудио
-        sample_rate, audio = wavfile.read(filepath)
+        with prepared_audio(filepath, self.target_sample_rate) as wav_path:
+            try:
+                sample_rate, audio = wavfile.read(wav_path)
+            except (OSError, ValueError, EOFError) as exc:
+                raise AudioLoadError(_('Не удалось прочитать аудиофайл {0}: {1}', Path(filepath).name, str(exc))) from exc
+        if audio.size == 0:
+            raise AudioLoadError(_('Аудиофайл пуст: {0}', Path(filepath).name))
         
         # Конвертация в моно если стерео
         if len(audio.shape) > 1:
@@ -155,7 +172,9 @@ class MorseDecoder:
         
         # Нормализация
         audio = audio.astype(np.float32)
-        audio = audio / np.max(np.abs(audio))
+        peak = np.max(np.abs(audio))
+        if peak > 0:
+            audio = audio / peak
         
         # Ресэмплинг если нужно
         if sample_rate != self.target_sample_rate:
@@ -167,6 +186,11 @@ class MorseDecoder:
     
     def bandpass_filter(self, audio, sample_rate):
         """Полосовой фильтр для выделения сигнала Морзе"""
+        if self.auto_frequency:
+            self.carrier_frequency = select_carrier(audio, sample_rate)
+            if self.carrier_frequency is not None:
+                filtered, self.filter_band = filter_carrier(audio, sample_rate, self.carrier_frequency)
+                return filtered
         # Используем предкомпилированные коэффициенты
         if self._filter_coefficients is None:
             self._compile_filter()
@@ -178,6 +202,8 @@ class MorseDecoder:
     
     def envelope_detection(self, audio, sample_rate):
         """Детектирование огибающей сигнала"""
+        if self.auto_frequency:
+            return smooth_envelope(audio, sample_rate)
         # Получение амплитуды через преобразование Гильберта
         analytic_signal = signal.hilbert(audio)
         envelope = np.abs(analytic_signal)
@@ -192,6 +218,8 @@ class MorseDecoder:
     
     def detect_pulses(self, envelope, sample_rate):
         """Детектирование импульсов (точек и тире)"""
+        if self.auto_frequency:
+            return detect_keying(envelope, sample_rate, self.pulse_percentile)
         # Адаптивный порог на основе перцентилей
         # Для импульсных сигналов (CW) большую часть времени сигнал выключен,
         # поэтому используем высокий перцентиль как порог
@@ -225,21 +253,7 @@ class MorseDecoder:
     
     def estimate_wpm(self, pulses):
         """Оценка скорости передачи в словах в минуту (WPM)"""
-        if not pulses:
-            return 0
-        
-        # Определяем минимальную длительность импульса (точка)
-        durations = [p['duration'] for p in pulses]
-        unit_time = np.median(durations)  # Используем медиану вместо минимума для устойчивости
-        
-        # По стандарту CODEX/PARIS: слово "PARIS" = 50 единичных элементов
-        # WPM = 60 / (50 * unit_time) = 1.2 / unit_time
-        wpm = 1.2 / unit_time if unit_time > 0 else 0
-        
-        # Ограничиваем разумными пределами (10-100 WPM для большинства случаев)
-        wpm = max(10, min(100, wpm))
-        
-        return round(wpm)
+        return estimate_timing(pulses)['wpm']
     
     def classify_morse(self, pulses, gaps, verbose=True):
         """Классификация импульсов на точки и тире"""
@@ -261,6 +275,10 @@ class MorseDecoder:
             median_duration = np.median(durations)
             unit_time = median_duration / 1.5  # примерная оценка
         
+        timing = estimate_timing(pulses)
+        if timing['reliable']:
+            unit_time = timing['dot_duration']
+
         # Классификация импульсов
         morse_symbols = []
         for i, pulse in enumerate(pulses):
@@ -270,21 +288,23 @@ class MorseDecoder:
                 morse_symbols.append('-')
         
         # Оценка скорости передачи
-        wpm = self.estimate_wpm(pulses)
+        wpm = timing['wpm']
         if wpm > 0 and verbose:
-            print(f"⚡ Определена скорость: ~{wpm} WPM")
+            print(_('⚡ Определена скорость: ~{0} WPM', wpm))
         
         # Группировка в символы и слова
-        morse_code = self.group_morse_symbols(morse_symbols, gaps, unit_time)
+        morse_code = self.group_morse_symbols(morse_symbols, gaps, unit_time, timing_reliable=timing['reliable'])
         
         return morse_code
     
-    def group_morse_symbols(self, symbols, gaps, unit_time):
+    def group_morse_symbols(self, symbols, gaps, unit_time, timing_reliable=False):
         """Группировка морзе-символов в буквы и слова"""
         if not symbols:
             return ""
         
         # Адаптивное определение порогов на основе распределения пауз
+        if len(gaps) == 0:
+            return [''.join(symbols)]
         median_gap = np.median(gaps)
         # Используем анализ распределения пауз для определения порогов
         # Есть 3 группы: внутрибуквенные, межбуквенные, межсловные
@@ -303,6 +323,10 @@ class MorseDecoder:
         # Порог между межбуквенными и межсловными:
         # берём середину между концом второго и началом третьего кластера
         word_threshold = (p90 + p92) / 2
+        if timing_reliable:
+            # Standard gaps: 1 unit within a character, 3 between letters, 7 between words.
+            letter_threshold = 2 * unit_time
+            word_threshold = 5 * unit_time
         
         morse_letters = []
         current_letter = symbols[0]
@@ -353,6 +377,10 @@ class MorseDecoder:
         # Проверка кеша
         if self.use_cache:
             params_dict = {
+                'auto_frequency': self.auto_frequency,
+                'sample_rate': self.target_sample_rate,
+                'min_freq': self.min_freq,
+                'max_freq': self.max_freq,
                 'pulse_percentile': self.pulse_percentile,
                 'gap_percentile_dot_dash': self.gap_percentile_dot_dash,
                 'gap_percentile_char': self.gap_percentile_char,
@@ -365,39 +393,39 @@ class MorseDecoder:
             if cache_key in _DECODE_CACHE:
                 if verbose:
                     print(f"\n{'='*60}")
-                    print(f"⚡ Используется кешированный результат: {Path(filepath).name}")
+                    print(_('⚡ Используется кешированный результат: {0}', Path(filepath).name))
                     print(f"{'='*60}")
                 return _DECODE_CACHE[cache_key]
         
         if verbose:
             print(f"\n{'='*60}")
-            print(f"Обработка: {Path(filepath).name}")
+            print(_('Обработка: {0}', Path(filepath).name))
             print(f"{'='*60}")
         
         try:
             # Загрузка аудио
             audio, sample_rate = self.load_audio(filepath)
             if verbose:
-                print(f"✓ Загружено: {len(audio)/sample_rate:.2f} сек, {sample_rate} Гц")
+                print(_('✓ Загружено: {0:.2f} сек, {1} Гц', len(audio) / sample_rate, sample_rate))
             
             # Фильтрация
             filtered = self.bandpass_filter(audio, sample_rate)
             if verbose:
-                print(f"✓ Применен полосовой фильтр: {self.min_freq}-{self.max_freq} Гц")
+                print(_('✓ Применен полосовой фильтр: {0}-{1} Гц', *self.filter_band))
             
             # Детектирование огибающей
             envelope = self.envelope_detection(filtered, sample_rate)
             if verbose:
-                print(f"✓ Детектирована огибающая сигнала")
+                print(_('✓ Детектирована огибающая сигнала'))
             
             # Детектирование импульсов
             pulses, gaps = self.detect_pulses(envelope, sample_rate)
             if verbose:
-                print(f"✓ Обнаружено импульсов: {len(pulses)}")
+                print(_('✓ Обнаружено импульсов: {0}', len(pulses)))
             
             if not pulses:
                 if verbose:
-                    print("✗ Импульсы не обнаружены")
+                    print(_('✗ Импульсы не обнаружены'))
                 duration = len(audio) / sample_rate
                 stats = {
                     'wpm': 0,
@@ -411,7 +439,7 @@ class MorseDecoder:
             # Классификация
             morse_letters = self.classify_morse(pulses, gaps, verbose=verbose)
             if verbose:
-                print(f"✓ Распознано морзе-символов: {len([m for m in morse_letters if m != ' '])}")
+                print(_('✓ Распознано морзе-символов: {0}', len([m for m in morse_letters if m != ' '])))
             
             # Сохраняем морзе-код
             morse_code_str = ' '.join(morse_letters)
@@ -421,9 +449,9 @@ class MorseDecoder:
             text_ru = self.decode_morse(morse_letters, 'ru')
             
             if verbose:
-                print(f"\n📝 Морзе-код: {morse_code_str}")
-                print(f"\n🇬🇧 Английский: {text_en}")
-                print(f"🇷🇺 Русский: {text_ru}")
+                print(_('\n📝 Морзе-код: {0}', morse_code_str))
+                print(_('\n🇬🇧 Английский: {0}', text_en))
+                print(_('🇷🇺 Русский: {0}', text_ru))
             
             # Анализ процедурных кодов
             if analyze_procedural and HAS_PROCEDURAL_CODES:
@@ -445,21 +473,22 @@ class MorseDecoder:
                     # Показываем анализ для варианта с большим количеством кодов
                     if verbose:
                         if total_codes_en >= total_codes_ru:
-                            print(detector.format_analysis(detected_en))
+                            print(detector.format_analysis(detected_en, language=get_console_language()))
                         else:
-                            print(detector.format_analysis(detected_ru))
+                            print(detector.format_analysis(detected_ru, language=get_console_language()))
             
             # Вычисление статистики
             duration = len(audio) / sample_rate
-            # WPM расчет по стандарту PARIS (50 дитов на слово)
-            total_dits = sum(len(m) for m in morse_letters if m != ' ')
-            if total_dits > 0 and duration > 0:
-                wpm = (total_dits / 50) / (duration / 60)
-            else:
-                wpm = 0
-            
+            timing = estimate_timing(pulses)
+            wpm = timing['wpm']
+
             stats = {
                 'wpm': round(wpm, 1),
+                'timing': timing,
+                'carrier_frequency': self.carrier_frequency,
+                'frequency_band': list(self.filter_band),
+                'auto_frequency': self.auto_frequency,
+                'transcription_verified': False,
                 'pulses': len(pulses),
                 'duration': round(duration, 2),
                 'pulse_threshold': self.pulse_percentile,
@@ -477,7 +506,9 @@ class MorseDecoder:
                 purity = analyzer.analyze_signal_purity(filtered, envelope, sample_rate)
                 
                 # Анализ мастерства оператора
-                skill = analyzer.analyze_operator_skill(pulses, gaps)
+                skill = analyzer.analyze_operator_skill(pulses, gaps,
+                    signal_reliable=timing['reliable'] and purity['purity_score'] >= 60
+                    and not purity['qrm_detected'])
                 
                 # Добавляем в статистику
                 stats['signal_analysis'] = {
@@ -487,22 +518,22 @@ class MorseDecoder:
                 }
                 
                 if verbose:
-                    print(f"\n📊 РАСШИРЕННАЯ АНАЛИТИКА")
+                    print(_('\n📊 РАСШИРЕННАЯ АНАЛИТИКА'))
                     print(f"{'='*60}")
-                    print(f"\n🔊 Тип модуляции: {modulation['type']} (уверенность: {modulation['confidence']}%)")
-                    print(f"\n✨ Чистота сигнала:")
-                    print(f"   Общая оценка:     {purity['purity_score']:.1f}/100")
-                    print(f"   Дрейф частоты:    {purity['chirp']:.1f}")
-                    print(f"   Щелчки/клики:     {purity['clicks']}")
-                    print(f"   Уровень шума:     {purity['noise_level']:.1f}%")
-                    print(f"   SNR (оценка):     {purity['snr_estimate']:.1f} dB")
-                    print(f"   QRM (помехи):     {'Да' if purity['qrm_detected'] else 'Нет'}")
-                    print(f"\n👤 Мастерство оператора:")
-                    print(f"   Уровень:          {skill['skill_level']}")
-                    print(f"   Общая оценка:     {skill['skill_score']:.1f}/100")
-                    print(f"   Стабильность:     {skill['timing_stability']:.1f}/100")
-                    print(f"   Консистентность:  {skill['rhythm_consistency']:.1f}/100")
-                    print(f"   Точка/Тире:       {skill['dot_dash_ratio']:.2f} (идеал: 3.0)")
+                    print(_('\n🔊 Тип модуляции: {0} (уверенность: {1}%)', modulation['type'], modulation['confidence']))
+                    print(_('\n✨ Чистота сигнала:'))
+                    print(_('   Общая оценка:     {0:.1f}/100', purity['purity_score']))
+                    print(_('   Дрейф частоты:    {0:.1f}', purity['chirp']))
+                    print(_('   Щелчки/клики:     {0}', purity['clicks']))
+                    print(_('   Уровень шума:     {0:.1f}%', purity['noise_level']))
+                    print(_('   SNR (оценка):     {0:.1f} dB', purity['snr_estimate']))
+                    print(_('   QRM (помехи):     {0}', _('Да') if purity['qrm_detected'] else _('Нет')))
+                    print(_('\n👤 Мастерство оператора:'))
+                    print(_('   Уровень:          {0}', skill['skill_level']))
+                    print(_('   Общая оценка:     {0:.1f}/100', skill['skill_score']))
+                    print(_('   Стабильность:     {0:.1f}/100', skill['timing_stability']))
+                    print(_('   Консистентность:  {0:.1f}/100', skill['rhythm_consistency']))
+                    print(_('   Точка/Тире:       {0:.2f} (идеал: 3.0)', skill['dot_dash_ratio']))
             
             # Сохранение результата в кеш
             result = (text_en, text_ru, stats)
@@ -517,11 +548,14 @@ class MorseDecoder:
             
             return result
             
+        except AudioLoadError as e:
+            print(_('❌ Ошибка: {0}', str(e)))
+            return None, None, {'wpm': 0, 'pulses': 0, 'duration': 0, 'error': str(e)}
         except FileNotFoundError:
-            print(f"❌ Файл не найден: {filepath}")
+            print(_('❌ Файл не найден: {0}', filepath))
             return None, None, {'wpm': 0, 'pulses': 0, 'duration': 0, 'error': 'File not found'}
         except Exception as e:
-            print(f"❌ Ошибка обработки: {type(e).__name__}: {str(e)}")
+            print(_('❌ Ошибка обработки: {0}: {1}', type(e).__name__, str(e)))
             import traceback
             traceback.print_exc()
             return None, None, {'wpm': 0, 'pulses': 0, 'duration': 0, 'error': str(e)}
@@ -536,10 +570,10 @@ def process_directory(directory_path, output_file='results.txt'):
     wav_files = list(directory.glob('*.wav'))
     
     if not wav_files:
-        print("WAV файлы не найдены")
+        print(_('WAV файлы не найдены'))
         return
     
-    print(f"\n🎵 Найдено {len(wav_files)} WAV файлов\n")
+    print(_('\n🎵 Найдено {0} WAV файлов\n', len(wav_files)))
     
     results = []
     
@@ -565,7 +599,7 @@ def process_directory(directory_path, output_file='results.txt'):
                 f.write(f"   Русский: {result['russian']}\n")
                 f.write("-"*70 + "\n\n")
         
-        print(f"\n✓ Результаты сохранены в {output_file}")
+        print(_('\n✓ Результаты сохранены в {0}', output_file))
     
     return results
 
@@ -577,9 +611,9 @@ if __name__ == "__main__":
     if training_data_path.exists():
         results = process_directory(training_data_path)
     else:
-        print(f"Папка {training_data_path} не найдена")
+        print(_('Папка {0} не найдена', training_data_path))
         
         # Пример обработки одного файла
-        print("\nПример использования:")
+        print(_('\nПример использования:'))
         print("decoder = MorseDecoder()")
         print("text_en, text_ru = decoder.process_file('path/to/file.wav')")

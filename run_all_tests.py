@@ -22,6 +22,10 @@ def run_all_tests():
     
     # Список всех тестовых модулей
     test_modules = [
+        'tests.test_audio_input',
+        'tests.test_cli_language',
+        'tests.test_noisy_cw',
+        'tests.test_morse_timing',
         'tests.test_morse_decoder',
         'tests.test_auto_tune',
         'tests.test_signal_analyzer',

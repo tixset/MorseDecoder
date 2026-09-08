@@ -31,6 +31,10 @@ GitHub: https://github.com/tixset/MorseDecoder
   Команда multi позволяет декодировать несколько параллельных сигналов на одной записи.
 """
 
+from modules.console_i18n import console_text as _, set_console_language, get_console_language
+
+from modules.audio_input import AudioLoadError
+
 import argparse
 import sys
 import os
@@ -65,27 +69,27 @@ def load_config_params(config_path):
     except FileNotFoundError:
         return None
     except json.JSONDecodeError as e:
-        print(f"⚠️  Ошибка чтения конфига: {e}")
+        print(_('⚠️  Ошибка чтения конфига: {0}', e))
         return None
 
 
 def cmd_auto(args):
     """Автоматическая оптимизация параметров для одного файла"""
     if not os.path.exists(args.file):
-        print(f"❌ Файл не найден: {args.file}")
+        print(_('❌ Файл не найден: {0}', args.file))
         return 1
     
-    print(f"🎯 Автоматическая настройка параметров для: {args.file}")
-    print(f"⚙️  Режим: {args.mode}")
+    print(_('🎯 Автоматическая настройка параметров для: {0}', args.file))
+    print(_('⚙️  Режим: {0}', args.mode))
     
     lookup = getattr(args, 'lookup_callsigns', False)
     result = auto_tune_parameters(args.file, mode=args.mode, lookup_callsigns=lookup)
     
     if result is None:
-        print("❌ Не удалось обработать файл")
+        print(_('❌ Не удалось обработать файл'))
         return 1
     
-    print(f"\n✅ Результаты сохранены:")
+    print(_('\n✅ Результаты сохранены:'))
     base_name = os.path.splitext(args.file)[0]
     print(f"   📄 {base_name}.txt")
     print(f"   ⚙️  {base_name}.config.json")
@@ -96,13 +100,13 @@ def cmd_auto(args):
 def cmd_batch(args):
     """Пакетная обработка всех WAV-файлов в папке"""
     if not os.path.exists(args.folder):
-        print(f"❌ Папка не найдена: {args.folder}")
+        print(_('❌ Папка не найдена: {0}', args.folder))
         return 1
     
     folder = Path(args.folder)
     wav_files = sorted(folder.glob("*.wav"))
     if not wav_files:
-        print(f"❌ WAV-файлы не найдены в: {args.folder}")
+        print(_('❌ WAV-файлы не найдены в: {0}', args.folder))
         return 1
     
     # Определяем количество воркеров
@@ -111,10 +115,10 @@ def cmd_batch(args):
         workers = multiprocessing.cpu_count()
     workers = min(workers, len(wav_files))  # Не больше чем файлов
     
-    print(f"📂 Найдено файлов: {len(wav_files)}")
-    print(f"⚙️  Режим анализа: {args.mode}")
+    print(_('📂 Найдено файлов: {0}', len(wav_files)))
+    print(_('⚙️  Режим анализа: {0}', args.mode))
     if workers > 1:
-        print(f"🔄 Параллельных потоков: {workers}")
+        print(_('🔄 Параллельных потоков: {0}', workers))
     print("="*80)
     
     results = []
@@ -140,18 +144,18 @@ def cmd_batch(args):
                     'time': elapsed,
                     'success': True
                 }
-                print(f"✅ [{idx}/{len(wav_files)}] {wav_file.name}: Score={result['score']:.1f}, {elapsed:.1f}с")
+                print(_('✅ [{0}/{1}] {2}: Score={3:.1f}, {4:.1f}с', idx, len(wav_files), wav_file.name, result['score'], elapsed))
                 return file_result
             else:
-                print(f"⚠️  [{idx}/{len(wav_files)}] {wav_file.name}: не удалось обработать")
+                print(_('⚠️  [{0}/{1}] {2}: не удалось обработать', idx, len(wav_files), wav_file.name))
                 return {'file': wav_file.name, 'success': False}
         except Exception as e:
-            print(f"❌ [{idx}/{len(wav_files)}] {wav_file.name}: ошибка - {e}")
+            print(_('❌ [{0}/{1}] {2}: ошибка - {3}', idx, len(wav_files), wav_file.name, e))
             return {'file': wav_file.name, 'success': False, 'error': str(e)}
     
     # Параллельная обработка если workers > 1, иначе последовательная
     if workers > 1:
-        print(f"\n🚀 Запуск параллельной обработки ({workers} потоков)...\n")
+        print(_('\n🚀 Запуск параллельной обработки ({0} потоков)...\n', workers))
         completed_count = 0
         with ThreadPoolExecutor(max_workers=workers) as executor:
             # Создаем задачи
@@ -165,12 +169,12 @@ def cmd_batch(args):
                 completed_count += 1
                 # Показываем прогресс
                 progress = (completed_count / len(wav_files)) * 100
-                print(f"📊 Прогресс: {completed_count}/{len(wav_files)} ({progress:.1f}%)")
+                print(_('📊 Прогресс: {0}/{1} ({2:.1f}%)', completed_count, len(wav_files), progress))
     else:
-        print(f"\n📝 Последовательная обработка...\n")
+        print(_('\n📝 Последовательная обработка...\n'))
         for idx, wav_file in enumerate(wav_files, 1):
             print(f"\n{'='*80}")
-            print(f"📁 Файл {idx}/{len(wav_files)}: {wav_file.name}")
+            print(_('📁 Файл {0}/{1}: {2}', idx, len(wav_files), wav_file.name))
             print(f"{'='*80}")
             
             result = process_file((idx, wav_file))
@@ -189,36 +193,36 @@ def cmd_batch(args):
         
         if all_callsigns:
             callsigns_file = f"{args.folder}/batch_callsigns.txt"
-            print(f"\n🔍 Поиск информации о позывных...")
+            print(_('\n🔍 Поиск информации о позывных...'))
             batch_lookup_callsigns(list(set(all_callsigns)), callsigns_file, delay=1.0)
     
     # Итоговая статистика
     print("\n\n" + "="*80)
-    print("📊 ИТОГОВАЯ СТАТИСТИКА")
+    print(_('📊 ИТОГОВАЯ СТАТИСТИКА'))
     print("="*80)
-    print(f"Обработано файлов: {len(results)}/{len(wav_files)}")
-    print(f"Общее время: {total_time:.1f} сек ({total_time/60:.1f} мин)")
+    print(_('Обработано файлов: {0}/{1}', len(results), len(wav_files)))
+    print(_('Общее время: {0:.1f} сек ({1:.1f} мин)', total_time, total_time / 60))
     
     if results:
-        print(f"\nСредние показатели:")
+        print(_('\nСредние показатели:'))
         avg_score = sum(r['score'] for r in results) / len(results)
         avg_wpm = sum(r['wpm'] for r in results) / len(results)
         avg_error = sum(r['error_ratio'] for r in results) / len(results)
         total_callsigns = sum(r['callsigns'] for r in results)
         
-        print(f"   Средняя оценка качества: {avg_score:.1f}")
-        print(f"   Средняя скорость: {avg_wpm:.1f} WPM")
-        print(f"   Средний процент ошибок: {avg_error*100:.1f}%")
-        print(f"   Всего позывных: {total_callsigns}")
+        print(_('   Средняя оценка качества: {0:.1f}', avg_score))
+        print(_('   Средняя скорость: {0:.1f} WPM', avg_wpm))
+        print(_('   Средний процент ошибок: {0:.1f}%', avg_error * 100))
+        print(_('   Всего позывных: {0}', total_callsigns))
         
-        print(f"\nЛучшие результаты (по оценке качества):")
+        print(_('\nЛучшие результаты (по оценке качества):'))
         sorted_results = sorted(results, key=lambda x: x['score'], reverse=True)
         for i, r in enumerate(sorted_results[:5], 1):
-            print(f"   {i}. {r['file']}: {r['score']:.1f} баллов, {r['wpm']:.1f} WPM, {r['callsigns']} позывных")
+            print(_('   {0}. {1}: {2:.1f} баллов, {3:.1f} WPM, {4} позывных', i, r['file'], r['score'], r['wpm'], r['callsigns']))
     
     print("\n" + "="*80)
-    print(f"\n✅ Обработка завершена")
-    print(f"   📊 Результаты сохранены в файлах *.txt и *.config.json")
+    print(_('\n✅ Обработка завершена'))
+    print(_('   📊 Результаты сохранены в файлах *.txt и *.config.json'))
     
     return 0
 
@@ -230,11 +234,11 @@ def cmd_multi(args):
     from modules.multi_signal_decoder import MultiSignalDecoder
     
     if not os.path.exists(args.file):
-        print(f"❌ Файл не найден: {args.file}")
+        print(_('❌ Файл не найден: {0}', args.file))
         return 1
     
-    print(f"🎵 ДЕКОДИРОВАНИЕ НЕСКОЛЬКИХ ПАРАЛЛЕЛЬНЫХ СИГНАЛОВ")
-    print(f"📁 Файл: {Path(args.file).name}")
+    print(_('🎵 ДЕКОДИРОВАНИЕ НЕСКОЛЬКИХ ПАРАЛЛЕЛЬНЫХ СИГНАЛОВ'))
+    print(_('📁 Файл: {0}', Path(args.file).name))
     print("="*80)
     
     # Парсим частотные диапазоны если указаны вручную
@@ -246,12 +250,12 @@ def cmd_multi(args):
                 min_f, max_f = map(int, band_str.strip().split('-'))
                 bands_list.append((min_f, max_f))
             frequency_bands = bands_list
-            print(f"📊 Заданные частотные диапазоны:")
+            print(_('📊 Заданные частотные диапазоны:'))
             for i, (min_f, max_f) in enumerate(frequency_bands, 1):
                 print(f"   {i}. {min_f}-{max_f} Hz")
         except Exception as e:
-            print(f"⚠️  Ошибка парсинга диапазонов: {e}")
-            print(f"   Используется автоопределение")
+            print(_('⚠️  Ошибка парсинга диапазонов: {0}', e))
+            print(_('   Используется автоопределение'))
             frequency_bands = None
     
     # Создаём декодер
@@ -277,22 +281,22 @@ def cmd_multi(args):
     peak_info = decode_result.get('peak_info')
     
     if not results:
-        print(f"\n❌ Сигналы не обнаружены")
+        print(_('\n❌ Сигналы не обнаружены'))
         return 1
     
     # Показываем результаты
     print(f"\n\n{'='*80}")
-    print(f"✅ НАЙДЕНО СИГНАЛОВ: {len(results)}")
+    print(_('✅ НАЙДЕНО СИГНАЛОВ: {0}', len(results)))
     print(f"{'='*80}\n")
     
     for idx, result in enumerate(results, 1):
-        print(f"📡 Сигнал #{idx}")
-        print(f"   Частота: {result['center_frequency']:.0f} Hz ({result['frequency_band'][0]}-{result['frequency_band'][1]} Hz)")
-        print(f"   Скорость: {result['wpm']} WPM")
-        print(f"   Качество: {result['quality']:.1f}%")
-        print(f"   Импульсов: {result['pulses']}")
-        print(f"   Сила сигнала: {result['signal_strength']:.3f}")
-        print(f"\n   📝 Текст:")
+        print(_('📡 Сигнал #{0}', idx))
+        print(_('   Частота: {0:.0f} Hz ({1}-{2} Hz)', result['center_frequency'], result['frequency_band'][0], result['frequency_band'][1]))
+        print(_('   Скорость: {0} WPM', result['wpm']))
+        print(_('   Качество: {0:.1f}%', result['quality']))
+        print(_('   Импульсов: {0}', result['pulses']))
+        print(_('   Сила сигнала: {0:.3f}', result['signal_strength']))
+        print(_('\n   📝 Текст:'))
         
         # Разбиваем текст на строки по 80 символов
         text = result['text']
@@ -309,13 +313,13 @@ def cmd_multi(args):
         prosigns = codes.get('prosigns', [])
         
         if callsigns or q_codes or prosigns:
-            print(f"\n   🔍 Обнаруженные коды:")
+            print(_('\n   🔍 Обнаруженные коды:'))
             if callsigns:
                 calls = [c if isinstance(c, str) else c.get('callsign', '') for c in callsigns]
-                print(f"      📡 Позывные: {', '.join(calls[:5])}")
+                print(_('      📡 Позывные: {0}', ', '.join(calls[:5])))
             if q_codes:
                 qcodes = [c if isinstance(c, str) else c.get('code', '') for c in q_codes]
-                print(f"      📟 Q-коды: {', '.join(qcodes[:5])}")
+                print(_('      📟 Q-коды: {0}', ', '.join(qcodes[:5])))
             if prosigns:
                 ps = [c if isinstance(c, str) else c.get('code', '') for c in prosigns]
                 print(f"      🔔 Prosigns: {', '.join(ps[:5])}")
@@ -335,14 +339,14 @@ def cmd_multi(args):
                     all_callsigns.append(call)
         
         if all_callsigns:
-            print(f"\n🔍 Поиск информации о {len(set(all_callsigns))} уникальных позывных...")
+            print(_('\n🔍 Поиск информации о {0} уникальных позывных...', len(set(all_callsigns))))
             lookup = CallsignLookup()
             for call in set(all_callsigns):
                 info = lookup.lookup(call)
                 if info:
                     print(f"   ✅ {call}: {info.get('country', 'Unknown')}")
                 else:
-                    print(f"   ⚪ {call}: информация не найдена")
+                    print(_('   ⚪ {0}: информация не найдена', call))
     
     # Сохраняем результаты в TXT
     txt_output = Path(args.file).with_suffix('.multi.txt')
@@ -622,10 +626,10 @@ def cmd_multi(args):
         
         json.dump(output_data, f, ensure_ascii=False, indent=2)
     
-    print(f"\n💾 Результаты сохранены:")
+    print(_('\n💾 Результаты сохранены:'))
     print(f"   📄 {txt_output}")
     print(f"   📊 {output_file}")
-    print(f"\n✅ Декодирование завершено")
+    print(_('\n✅ Декодирование завершено'))
     
     return 0
 
@@ -635,7 +639,7 @@ def cmd_decode(args):
     Декодирование файла с параметрами из .config.json
     """
     if not os.path.exists(args.file):
-        print(f"❌ Файл не найден: {args.file}")
+        print(_('❌ Файл не найден: {0}', args.file))
         return 1
     
     # Определяем путь к конфигу
@@ -650,12 +654,12 @@ def cmd_decode(args):
     params = load_config_params(config_path)
     
     if params is None:
-        print(f"❌ Конфиг не найден: {config_path}")
-        print(f"💡 Создайте конфиг командой: morse_cli.py auto {args.file}")
+        print(_('❌ Конфиг не найден: {0}', config_path))
+        print(_('💡 Создайте конфиг командой: morse_cli.py auto {0}', args.file))
         return 1
     
-    print(f"📁 Декодирование: {Path(args.file).name}")
-    print(f"⚙️  Параметры из: {Path(config_path).name}")
+    print(_('📁 Декодирование: {0}', Path(args.file).name))
+    print(_('⚙️  Параметры из: {0}', Path(config_path).name))
     print(f"   • Pulse Detection:  {params.get('pulse_percentile', 60)}")
     print(f"   • Dot-Dash Gap:     {params.get('gap_percentile_dot_dash', 60)}")
     print(f"   • Character Gap:    {params.get('gap_percentile_char', 75)}")
@@ -667,41 +671,37 @@ def cmd_decode(args):
         pulse_percentile=params.get('pulse_percentile', 60),
         gap_percentile_dot_dash=params.get('gap_percentile_dot_dash', 60),
         gap_percentile_char=params.get('gap_percentile_char', 75),
-        gap_percentile_word=params.get('gap_percentile_word', 90)
+        gap_percentile_word=params.get('gap_percentile_word', 90),
+        auto_frequency=params.get('auto_frequency', True)
     )
     
     # Обработка файла
     text_en, text_ru, stats = decoder.process_file(args.file, analyze_procedural=True, verbose=True)
+    if stats.get('error'):
+        return 1
     
     # Выбираем лучший вариант
     if text_en and text_ru:
-        quality_en = 100 - (text_en.count('?') / len(text_en) * 100) if text_en else 0
-        quality_ru = 100 - (text_ru.count('?') / len(text_ru) * 100) if text_ru else 0
+        quality_en = 100 - (text_en.count('□') / len(text_en) * 100) if text_en else 0
+        quality_ru = 100 - (text_ru.count('□') / len(text_ru) * 100) if text_ru else 0
         
-        print(f"\n📊 Качество:")
-        print(f"   🇬🇧 Английский: {quality_en:.1f}%")
-        print(f"   🇷🇺 Русский:    {quality_ru:.1f}%")
+        print(_('\n📊 Доля символов без □ (не точность распознавания):'))
+        print(_('   🇬🇧 Английский: {0:.1f}%', quality_en))
+        print(_('   🇷🇺 Русский:    {0:.1f}%', quality_ru))
         
-        if quality_en > quality_ru:
-            print(f"   ✅ Выбран: Английский")
-        elif quality_ru > quality_en:
-            print(f"   ✅ Выбран: Русский")
-        else:
-            print(f"   ✅ Качество одинаковое")
-    
     # Анализ процедурных кодов если запрошен
     if hasattr(args, 'analyze') and args.analyze:
         detector = ProceduralCodeDetector()
         best_text = text_en if len(text_en) >= len(text_ru) else text_ru
         codes = detector.detect_codes(best_text)
         
-        print(f"\n🔍 Обнаружено:")
-        print(f"   📡 Позывные:      {len(codes.get('callsigns', []))}")
-        print(f"   📟 Q-коды:        {len(codes.get('q_codes', []))}")
+        print(_('\n🔍 Обнаружено:'))
+        print(_('   📡 Позывные:      {0}', len(codes.get('callsigns', []))))
+        print(_('   📟 Q-коды:        {0}', len(codes.get('q_codes', []))))
         print(f"   🔤 Prosigns:      {len(codes.get('prosigns', []))}")
-        print(f"   📝 CW-сокращения: {len(codes.get('cw_abbreviations', []))}")
+        print(_('   📝 CW-сокращения: {0}', len(codes.get('cw_abbreviations', []))))
     
-    print(f"\n✅ Декодирование завершено")
+    print(_('\n✅ Декодирование завершено'))
     return 0
 
 
@@ -711,13 +711,13 @@ def cmd_decode(args):
 def cmd_experiment(args):
     """Экспериментальный режим с вариацией параметров"""
     if not os.path.exists(args.file):
-        print(f"❌ Файл не найден: {args.file}")
+        print(_('❌ Файл не найден: {0}', args.file))
         return 1
     
-    print(f"🧪 ЭКСПЕРИМЕНТАЛЬНЫЙ РЕЖИМ")
-    print(f"📁 Файл: {args.file}")
-    print(f"🔄 Итераций: {args.iterations}")
-    print(f"🎯 Цель: поиск Q/Z-кодов, CW-сокращений, осмысленного текста\n")
+    print(_('🧪 ЭКСПЕРИМЕНТАЛЬНЫЙ РЕЖИМ'))
+    print(_('📁 Файл: {0}', args.file))
+    print(_('🔄 Итераций: {0}', args.iterations))
+    print(_('🎯 Цель: поиск Q/Z-кодов, CW-сокращений, осмысленного текста\n'))
     
     best_results = []
     code_detector = ProceduralCodeDetector()
@@ -742,7 +742,7 @@ def cmd_experiment(args):
     ))
     selected_combinations = random.sample(all_combinations, min(args.iterations, len(all_combinations)))
     
-    print(f"🔬 Будет протестировано комбинаций: {len(selected_combinations)}\n")
+    print(_('🔬 Будет протестировано комбинаций: {0}\n', len(selected_combinations)))
     
     for idx, (pulse_perc, gap_dd, gap_char, min_f, max_f) in enumerate(selected_combinations, 1):
         print(f"[{idx}/{len(selected_combinations)}] Pulse={pulse_perc}, Gap_DD={gap_dd}, Gap_Char={gap_char}, Freq={min_f}-{max_f}")
@@ -752,6 +752,7 @@ def cmd_experiment(args):
             pulse_percentile=pulse_perc,
             gap_percentile_dot_dash=gap_dd,
             gap_percentile_char=gap_char,
+            auto_frequency=False,
             min_freq=min_f,
             max_freq=max_f
         )
@@ -812,9 +813,9 @@ def cmd_experiment(args):
         best_results.append(result)
         
         if total_codes > 0:
-            print(f"  ✨ Найдено кодов: {total_codes} | Читаемость: {readability_score:.1f}% | Ошибки: {error_rate:.1f}%")
+            print(_('  ✨ Найдено кодов: {0} | Читаемость: {1:.1f}% | Ошибки: {2:.1f}%', total_codes, readability_score, error_rate))
         else:
-            print(f"  ⚪ Коды не найдены | Читаемость: {readability_score:.1f}% | Ошибки: {error_rate:.1f}%")
+            print(_('  ⚪ Коды не найдены | Читаемость: {0:.1f}% | Ошибки: {1:.1f}%', readability_score, error_rate))
     
     # Сортируем по качеству
     best_results.sort(key=lambda x: x['quality_score'], reverse=True)
@@ -836,15 +837,15 @@ def cmd_experiment(args):
     
     # Показываем лучшие результаты
     print(f"\n{'='*70}")
-    print(f"🏆 ТОП-5 ЛУЧШИХ РЕЗУЛЬТАТОВ:")
+    print(_('🏆 ТОП-5 ЛУЧШИХ РЕЗУЛЬТАТОВ:'))
     print(f"{'='*70}\n")
     
     for idx, result in enumerate(best_results[:5], 1):
-        print(f"#{idx} | Качество: {result['quality_score']:.1f}")
+        print(_('#{0} | Качество: {1:.1f}', idx, result['quality_score']))
         print(f"    Pulse: {result['pulse_percentile']} | Gap_DD: {result['gap_dot_dash']} | Gap_Char: {result['gap_char']}")
         print(f"    Freq: {result['min_freq']}-{result['max_freq']} Hz")
-        print(f"    Кодов найдено: {result['total_codes']}")
-        print(f"    Читаемость: {result['readability']:.1f}% | Ошибки: {result['error_rate']:.1f}%")
+        print(_('    Кодов найдено: {0}', result['total_codes']))
+        print(_('    Читаемость: {0:.1f}% | Ошибки: {1:.1f}%', result['readability'], result['error_rate']))
         
         codes = result['codes']
         # Обрабатываем коды с учетом нового формата (могут быть списки dict или списки str)
@@ -854,7 +855,7 @@ def cmd_experiment(args):
                 q_list = [item['code'] for item in q_items[:5]]
             else:
                 q_list = q_items[:5]
-            print(f"    📻 Q-коды: {', '.join(q_list)}")
+            print(_('    📻 Q-коды: {0}', ', '.join(q_list)))
         
         if codes.get('z_codes'):
             z_items = codes['z_codes']
@@ -862,7 +863,7 @@ def cmd_experiment(args):
                 z_list = [item['code'] for item in z_items[:5]]
             else:
                 z_list = z_items[:5]
-            print(f"    🔒 Z-коды: {', '.join(z_list)}")
+            print(_('    🔒 Z-коды: {0}', ', '.join(z_list)))
         
         if codes.get('cw_abbreviations'):
             cw_items = codes['cw_abbreviations']
@@ -894,109 +895,88 @@ def cmd_experiment(args):
                 call_list = [item['callsign'] for item in call_items[:5]]
             else:
                 call_list = call_items[:5]
-            print(f"    📡 Позывные: {', '.join(call_list)}")
+            print(_('    📡 Позывные: {0}', ', '.join(call_list)))
         
         # Показываем фрагмент текста
         preview = result['text'][:200].replace('\n', ' ')
-        print(f"    Текст: {preview}...")
+        print(_('    Текст: {0}...', preview))
         print()
     
-    print(f"✅ Результаты сохранены: {output_file}")
+    print(_('✅ Результаты сохранены: {0}', output_file))
     
     return 0
 
 
-def main():
+def _main(argv):
     """Главная функция CLI"""
     parser = argparse.ArgumentParser(
-        description='Morse Decoder - декодирование азбуки Морзе из WebSDR записей',
+        description=_('Morse Decoder - декодирование азбуки Морзе из WebSDR записей'),
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Примеры использования:
-  
-  Автонастройка одного файла:
-    python morse_cli.py auto recording.wav
-    python morse_cli.py auto recording.wav --mode thorough
-    python morse_cli.py auto recording.wav --lookup-callsigns
-  
-  Пакетная обработка папки:
-    python morse_cli.py batch TrainingData
-    python morse_cli.py batch TrainingData --mode extreme
-    python morse_cli.py batch TrainingData --lookup-callsigns
-  
-  Декодирование нескольких параллельных сигналов:
-    python morse_cli.py multi recording.wav --auto-detect
-    python morse_cli.py multi recording.wav --bands "400-800,1000-1400,1500-1900"
-    python morse_cli.py multi recording.wav --speed-range "15-40"
-  
-  Экспериментальный поиск кодов:
-    python morse_cli.py experiment recording.wav --iterations 100
-
-Режимы обработки (--mode):
-  fast      - быстрая обработка (меньше вариантов параметров) [по умолчанию]
-  thorough  - тщательная обработка (средний баланс)
-  extreme   - максимальная точность (много времени)
-        """
+        epilog=_('\nПримеры использования:\n  \n  Автонастройка одного файла:\n    python morse_cli.py auto recording.wav\n    python morse_cli.py auto recording.wav --mode thorough\n    python morse_cli.py auto recording.wav --lookup-callsigns\n  \n  Пакетная обработка папки:\n    python morse_cli.py batch TrainingData\n    python morse_cli.py batch TrainingData --mode extreme\n    python morse_cli.py batch TrainingData --lookup-callsigns\n  \n  Декодирование нескольких параллельных сигналов:\n    python morse_cli.py multi recording.wav --auto-detect\n    python morse_cli.py multi recording.wav --bands "400-800,1000-1400,1500-1900"\n    python morse_cli.py multi recording.wav --speed-range "15-40"\n  \n  Экспериментальный поиск кодов:\n    python morse_cli.py experiment recording.wav --iterations 100\n\nРежимы обработки (--mode):\n  fast      - быстрая обработка (меньше вариантов параметров) [по умолчанию]\n  thorough  - тщательная обработка (средний баланс)\n  extreme   - максимальная точность (много времени)\n        ')
     )
     
-    subparsers = parser.add_subparsers(dest='command', help='Доступные команды')
+    subparsers = parser.add_subparsers(dest='command', help=_('Доступные команды'))
     
     # Команда: auto
-    parser_auto = subparsers.add_parser('auto', help='Автонастройка параметров для файла')
-    parser_auto.add_argument('file', help='Путь к WAV-файлу')
+    parser_auto = subparsers.add_parser('auto', help=_('Автонастройка параметров для файла'))
+    parser_auto.add_argument('file', help=_('Путь к аудиофайлу (WAV, MP3, OGG)'))
     parser_auto.add_argument('--mode', '-m', default='fast', 
                             choices=['fast', 'thorough', 'extreme'],
-                            help='Режим обработки (по умолчанию: fast)')
+                            help=_('Режим обработки (по умолчанию: fast)'))
     parser_auto.add_argument('--lookup-callsigns', '--lookup', action='store_true',
-                           help='Искать информацию о найденных позывных через API')
+                           help=_('Искать информацию о найденных позывных через API'))
     parser_auto.set_defaults(func=cmd_auto)
     
     # Команда: batch
-    parser_batch = subparsers.add_parser('batch', help='Пакетная обработка папки')
-    parser_batch.add_argument('folder', help='Путь к папке с WAV-файлами')
+    parser_batch = subparsers.add_parser('batch', help=_('Пакетная обработка папки'))
+    parser_batch.add_argument('folder', help=_('Путь к папке с WAV-файлами'))
     parser_batch.add_argument('--mode', '-m', default='fast',
                              choices=['fast', 'thorough', 'extreme'],
-                             help='Режим обработки (по умолчанию: fast)')
+                             help=_('Режим обработки (по умолчанию: fast)'))
     parser_batch.add_argument('--lookup-callsigns', '--lookup', action='store_true',
-                            help='Искать информацию о найденных позывных через API')
+                            help=_('Искать информацию о найденных позывных через API'))
     parser_batch.add_argument('--workers', '-w', type=int, default=0,
-                            help='Количество параллельных потоков (0=авто, 1=последовательно)')
+                            help=_('Количество параллельных потоков (0=авто, 1=последовательно)'))
     parser_batch.set_defaults(func=cmd_batch)
     
     # Команда: decode (декодирование с параметрами из .config.json)
-    parser_decode = subparsers.add_parser('decode', help='Декодирование с параметрами из .config.json')
-    parser_decode.add_argument('file', help='Путь к WAV-файлу')
-    parser_decode.add_argument('--config', '-c', help='Путь к .config.json (по умолчанию: рядом с файлом)')
+    parser_decode = subparsers.add_parser('decode', help=_('Декодирование с параметрами из .config.json'))
+    parser_decode.add_argument('file', help=_('Путь к аудиофайлу (WAV, MP3, OGG)'))
+    parser_decode.add_argument('--config', '-c', help=_('Путь к .config.json (по умолчанию: рядом с файлом)'))
     parser_decode.add_argument('--analyze', '-a', action='store_true',
-                              help='Провести анализ процедурных кодов')
+                              help=_('Провести анализ процедурных кодов'))
     parser_decode.add_argument('--lookup-callsigns', '--lookup', action='store_true',
-                              help='Искать информацию о найденных позывных через API')
+                              help=_('Искать информацию о найденных позывных через API'))
     parser_decode.set_defaults(func=cmd_decode)
     
     # Команда: multi (декодирование нескольких параллельных сигналов)
-    parser_multi = subparsers.add_parser('multi', help='Декодирование нескольких параллельных сигналов')
-    parser_multi.add_argument('file', help='Путь к WAV-файлу')
+    parser_multi = subparsers.add_parser('multi', help=_('Декодирование нескольких параллельных сигналов'))
+    parser_multi.add_argument('file', help=_('Путь к аудиофайлу (WAV, MP3, OGG)'))
     parser_multi.add_argument('--auto-detect', '-a', action='store_true', default=True,
-                             help='Автоматически определять частотные диапазоны (по умолчанию)')
+                             help=_('Автоматически определять частотные диапазоны (по умолчанию)'))
     parser_multi.add_argument('--bands', '-b', type=str,
-                             help='Частотные диапазоны вручную, например: "400-800,900-1300,1400-1800"')
+                             help=_('Частотные диапазоны вручную, например: "400-800,900-1300,1400-1800"'))
     parser_multi.add_argument('--max-signals', '-m', type=int, default=3,
-                             help='Максимальное количество сигналов для обнаружения (по умолчанию: 3)')
+                             help=_('Максимальное количество сигналов для обнаружения (по умолчанию: 3)'))
     parser_multi.add_argument('--speed-range', '-s', type=str, default="10-50",
-                             help='Диапазон скоростей WPM для поиска (по умолчанию: 10-50)')
+                             help=_('Диапазон скоростей WPM для поиска (по умолчанию: 10-50)'))
     parser_multi.add_argument('--lookup-callsigns', '--lookup', action='store_true',
-                             help='Искать информацию о найденных позывных через API')
+                             help=_('Искать информацию о найденных позывных через API'))
     parser_multi.set_defaults(func=cmd_multi)
     
     # Команда: experiment
-    parser_exp = subparsers.add_parser('experiment', help='Экспериментальный поиск кодов')
-    parser_exp.add_argument('file', help='Путь к WAV-файлу')
+    parser_exp = subparsers.add_parser('experiment', help=_('Экспериментальный поиск кодов'))
+    parser_exp.add_argument('file', help=_('Путь к аудиофайлу (WAV, MP3, OGG)'))
     parser_exp.add_argument('--iterations', '-n', type=int, default=30,
-                           help='Количество экспериментов (по умолчанию: 30)')
+                           help=_('Количество экспериментов (по умолчанию: 30)'))
     parser_exp.set_defaults(func=cmd_experiment)
     
+    for command_parser in (parser, parser_auto, parser_batch, parser_decode, parser_multi, parser_exp):
+        command_parser.add_argument('--ru', action='store_true', default=argparse.SUPPRESS,
+                                    help=_('Выводить сообщения консоли на русском'))
+
     # Парсим аргументы
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     
     # Если команда не указана, показываем help
     if not args.command:
@@ -1006,14 +986,30 @@ def main():
     # Выполняем команду
     try:
         return args.func(args)
+    except AudioLoadError as e:
+        print(_('❌ Ошибка: {0}', str(e)))
+        return 1
     except KeyboardInterrupt:
-        print("\n\n⚠️  Прервано пользователем")
+        print(_('\n\n⚠️  Прервано пользователем'))
         return 130
     except Exception as e:
-        print(f"\n❌ Ошибка: {e}")
+        print(_('\n❌ Ошибка: {0}', e))
         import traceback
         traceback.print_exc()
         return 1
+
+
+def main(argv=None):
+    """Select the console language before parsing, including --help output."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # A token after -- is a positional value, even if it is named --ru.
+    options = argv[:argv.index('--')] if '--' in argv else argv
+    previous_language = get_console_language()
+    set_console_language('ru' if '--ru' in options else 'en')
+    try:
+        return _main(argv)
+    finally:
+        set_console_language(previous_language)
 
 
 if __name__ == '__main__':
