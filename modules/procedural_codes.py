@@ -9,6 +9,7 @@ from .console_i18n import console_text
 import re
 from .fuzzy_matcher import smart_code_detection, fuzzy_match_callsign, contextual_code_enhancement
 from .code_dictionaries import (
+    ARRL_QN_CODES, RU_Z_CODES, SOVIET_URGENCY_LEVELS,
     Q_CODES, Y_CODES, Z_CODES, CW_ABBREVIATIONS, PROSIGNS,
     SHCH_CODES, RU_PROCEDURAL_ABBR, SINPO_CODES, MARITIME_CODES,
     SOVIET_CODES, METEO_CODES, URGENCY_LEVELS, SERVICE_SIGNALS,
@@ -31,12 +32,15 @@ SPACED_CALLSIGN_PATTERN = re.compile(
 class ProceduralCodeDetector:
     """Детектор процедурных кодов и команд в расшифрованном тексте"""
     
-    def __init__(self, use_fuzzy_matching=False, max_errors=1):
+    def __init__(self, use_fuzzy_matching=False, max_errors=1, profile="all"):
         """
         Args:
             use_fuzzy_matching: использовать нечеткий поиск (рекомендуется)
             max_errors: максимальное количество ошибок для fuzzy matching (1-2)
         """
+        if profile not in ('all', 'ham_cw', 'ru_soviet', 'arrl_traffic', 'maritime'):
+            raise ValueError('Unsupported code profile: ' + profile)
+        self.profile = profile
         self.q_codes = Q_CODES
         self.y_codes = Y_CODES
         self.z_codes = Z_CODES
@@ -66,14 +70,120 @@ class ProceduralCodeDetector:
             dict с обнаруженными кодами и их расшифровками
         """
         text = text.upper().strip()
-        words = text.split()
-        
-        # Если включен fuzzy matching, используем улучшенный алгоритм
+        # A question mark belongs to the transmission, not the dictionary key.
+        # Keep internal punctuation and <prosign> tags intact.
+        original_words = text.split()
+        words = [word.strip('.,;:!?()"') for word in original_words]
+        words = [word for word in words if word]
+        normalized = ' '.join(words)
         if self.use_fuzzy:
-            return self._detect_codes_fuzzy(text, words)
+            detected = self._detect_codes_fuzzy(normalized, words)
         else:
-            return self._detect_codes_exact(words)
-    
+            detected = self._detect_codes_exact(words)
+        self._detect_extended(detected, words, original_words)
+        self._apply_profile(detected)
+        return detected
+
+    def _detect_extended(self, detected, words, original_words):
+        """Exact, service-specific additions in both exact and fuzzy modes."""
+        for field, dictionary in (
+            ('arrl_qn_codes', ARRL_QN_CODES),
+            ('ru_z_codes', RU_Z_CODES),
+            ('soviet_urgency_levels', SOVIET_URGENCY_LEVELS),
+        ):
+            detected[field] = [dict(code=word, meaning=dictionary[word])
+                               for word in words if word in dictionary]
+
+        if self.use_fuzzy:
+            # Tagged signs are exact audio evidence; fuzzy guesses about plain
+            # letters are kept distinguishable via is_prosign=False.
+            for word in words:
+                for code in re.findall(r'<([A-Z]+)>', word):
+                    if code in self.prosigns:
+                        detected['prosigns'].append(dict(
+                            code=code, meaning=self.prosigns[code],
+                            original_word='<' + code + '>', exact_match=True))
+
+        # Match phrases by token boundaries, including the legacy НЕ ПНЛ.
+        for field, dictionary, key in (
+            ('soviet_codes', self.soviet_codes, 'code'),
+            ('service_signals', self.service, 'signal'),
+        ):
+            for phrase, meaning in dictionary.items():
+                parts = phrase.split()
+                if len(parts) > 1:
+                    for i in range(len(words) - len(parts) + 1):
+                        if words[i:i + len(parts)] == parts:
+                            detected[field].append({key: phrase, 'meaning': meaning})
+        if any(item['code'] == 'НЕ ПНЛ' for item in detected['soviet_codes']):
+            # Do not report the affirmative ПНЛ for the negated occurrence.
+            count = sum(item['code'] == 'НЕ ПНЛ' for item in detected['soviet_codes'])
+            for item in detected['soviet_codes'][:]:
+                if count and item['code'] == 'ПНЛ':
+                    detected['soviet_codes'].remove(item)
+                    count -= 1
+
+        # Tag each Q/Щ occurrence, retaining question vs statement order.
+        for field in ('q_codes', 'shch_codes', 'arrl_qn_codes'):
+            occurrences = {}
+            for token in original_words:
+                key = token.strip('.,;:!?()"')
+                occurrences.setdefault(key, []).append('?' in token)
+            for item in detected[field]:
+                flags = occurrences.get(item['code'], [])
+                if flags:
+                    item['is_question'] = flags.pop(0)
+
+        detected['rst_reports'] = []
+        for i, word in enumerate(words[:-1]):
+            value = words[i + 1]
+            if word == 'RST' and re.fullmatch(r'[1-5][1-9][1-9]', value):
+                detected['rst_reports'].append(dict(
+                    code='RST', value=value, readability=int(value[0]),
+                    strength=int(value[1]), tone=int(value[2])))
+
+    def _apply_profile(self, detected):
+        """Label code families and optionally restrict ambiguous service matches."""
+        systems = {
+            'q_codes': ('international_q', 'Project Q dictionary'),
+            'arrl_qn_codes': ('arrl_qn', 'ARRL FSD-218'),
+            'ru_z_codes': ('soviet_z', 'USSR radio rules, 1982, appendix 6'),
+            'shch_codes': ('soviet_shch', 'USSR radio rules, 1982, appendix 6'),
+            'ru_procedural_abbr': ('ru_procedural', 'USSR radio rules, 1982, appendix 7'),
+            'soviet_urgency_levels': ('soviet_priority', 'USSR radio rules, 1982'),
+            'soviet_codes': ('soviet_legacy', 'Project legacy heuristics'),
+            'cw_abbreviations': ('ham_cw', 'Extended CW reference'),
+            'prosigns': ('prosigns', 'Project and extended prosign tables'),
+            'z_codes': ('latin_z', 'Project Latin Z dictionary'),
+            'y_codes': ('y_codes', 'Project Y dictionary'),
+            'maritime_codes': ('maritime', 'Project maritime dictionary'),
+            'meteo_codes': ('weather', 'Project weather dictionary'),
+            'sinpo_codes': ('sinpo', 'Project SINPO dictionary'),
+            'service_signals': ('service', 'Project and extended service signals'),
+        }
+        common = {'prosigns', 'service_signals', 'rst_reports'}
+        profiles = {
+            'ham_cw': common | {'q_codes', 'cw_abbreviations'},
+            'arrl_traffic': common | {'arrl_qn_codes', 'cw_abbreviations'},
+            'ru_soviet': common | {'shch_codes', 'ru_z_codes', 'ru_procedural_abbr',
+                                  'soviet_codes', 'soviet_urgency_levels'},
+            'maritime': common | {'q_codes', 'maritime_codes'},
+        }
+        for field, (system, source) in systems.items():
+            if self.profile != 'all' and field not in profiles[self.profile]:
+                detected[field] = []
+            for item in detected.get(field, []):
+                item['code_system'] = system
+                item['source'] = source
+                # A dictionary match is not evidence of transcription accuracy.
+                item.setdefault('exact_match', True)
+                if field == 'prosigns':
+                    item['is_prosign'] = ('original_word' not in item or
+                                          '<' in item['original_word'])
+        if self.profile != 'all':
+            detected['urgency_level'] = None  # legacy transliterated priority labels
+        detected['profile'] = self.profile
+
     def _detect_codes_fuzzy(self, text, words):
         """
         Обнаружение кодов с нечетким поиском и контекстным анализом
@@ -545,6 +655,35 @@ class ProceduralCodeDetector:
         
         return structure
     
+    def format_bilingual_analysis(self, text_en, text_ru, language='ru'):
+        """One display report; keep the per-alphabet detector results unchanged."""
+        en = self.detect_codes(text_en or '')
+        ru = self.detect_codes(text_ru or '')
+        combined = dict(en)
+        for field, value in en.items():
+            if isinstance(value, list):
+                combined[field] = list(value)
+                # Retain occurrence counts within each alphabet; do not double
+                # the same occurrences merely because both alphabets matched.
+                remaining = list(value)
+                for item in ru.get(field, []):
+                    if item in remaining:
+                        remaining.remove(item)
+                    else:
+                        combined[field].append(item)
+        for field in ('check_field', 'message_number', 'urgency_level'):
+            if not combined.get(field):
+                combined[field] = ru.get(field)
+        combined['message_structures'] = [('EN', en['message_structure'])]
+        if en['message_structure'] != ru['message_structure']:
+            combined['message_structures'].append(('RU', ru['message_structure']))
+        else:
+            combined['message_structures'][0] = ('EN/RU', en['message_structure'])
+        primary = {item['code'] for item in combined['ru_procedural_abbr']}
+        combined['soviet_codes'] = [item for item in combined['soviet_codes']
+                                    if item['code'] not in primary]
+        return self.format_analysis(combined, language=language)
+
     def format_analysis(self, detected, language='ru'):
         """Форматированный вывод анализа"""
         _ = partial(console_text, language=language)
@@ -553,13 +692,17 @@ class ProceduralCodeDetector:
         lines.append(_('АНАЛИЗ ПРОЦЕДУРНЫХ КОДОВ И КОМАНД'))
         lines.append('=' * 70)
 
-        # Структура сообщения
-        structure = detected['message_structure']
+        # Identical EN/RU structure is displayed once. Different structures
+        # stay explicitly labelled instead of silently choosing an alphabet.
+        structures = detected.get('message_structures', [(None, detected['message_structure'])])
         lines.append(_('\n📋 СТРУКТУРА СООБЩЕНИЯ:'))
-        lines.append(_('   Тип: {0}', _(self._type_name(structure['probable_type']))))
-        lines.append(_('   Имеет начало: {0}', '✓' if structure['has_start'] else '✗'))
-        lines.append(_('   Имеет конец: {0}', '✓' if structure['has_end'] else '✗'))
-        lines.append(_('   Имеет позывные: {0}', '✓' if structure['has_callsign'] else '✗'))
+        for alphabet, structure in structures:
+            if alphabet:
+                lines.append('   ' + alphabet + ':')
+            lines.append(_('   Тип: {0}', _(self._type_name(structure['probable_type']))))
+            lines.append(_('   Имеет начало: {0}', '✓' if structure['has_start'] else '✗'))
+            lines.append(_('   Имеет конец: {0}', '✓' if structure['has_end'] else '✗'))
+            lines.append(_('   Имеет позывные: {0}', '✓' if structure['has_callsign'] else '✗'))
 
         # Позывные
         if detected['callsigns']:
@@ -584,73 +727,88 @@ class ProceduralCodeDetector:
         if detected['prosigns']:
             lines.append(_('\n🔧 ПРОЦЕДУРНЫЕ ЗНАКИ (PROSIGNS):'))
             for item in detected['prosigns']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # Q-коды
         if detected['q_codes']:
             lines.append(_('\n🔤 Q-КОДЫ (Международные):'))
             for item in detected['q_codes']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # Y-коды
         if detected['y_codes']:
             lines.append(_('\n✈️  Y-КОДЫ (Авиационные):'))
             for item in detected['y_codes']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # Z-коды
         if detected['z_codes']:
             lines.append(_('\n🎖️  Z-КОДЫ (Процедурные):'))
             for item in detected['z_codes']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # Щ-коды (российские)
         if detected['shch_codes']:
             lines.append(_('\n🇷🇺 Щ-КОДЫ (Российские процедурные):'))
             for item in detected['shch_codes']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # Российские процедурные сокращения
         if detected.get('ru_procedural_abbr'):
             lines.append(_('\n📋 РОССИЙСКИЕ ПРОЦЕДУРНЫЕ СОКРАЩЕНИЯ:'))
             for item in detected['ru_procedural_abbr']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # Советские коды
         if detected.get('soviet_codes'):
             lines.append(_('\n🚩 СОВЕТСКИЕ ПРОЦЕДУРНЫЕ КОДЫ:'))
             for item in detected['soviet_codes']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # Морские коды
         if detected.get('maritime_codes'):
             lines.append(_('\n⚓ МОРСКИЕ КОДЫ (INTERCO):'))
             for item in detected['maritime_codes']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # Метеокоды
         if detected.get('meteo_codes'):
             lines.append(_('\n🌦️  МЕТЕОРОЛОГИЧЕСКИЕ КОДЫ:'))
             for item in detected['meteo_codes']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # SINPO коды
         if detected.get('sinpo_codes'):
             lines.append(_('\n📊 SINPO КОДЫ (Оценка качества):'))
             for item in detected['sinpo_codes']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # CW-сокращения
         if detected['cw_abbreviations']:
             lines.append(_('\n📝 CW-СОКРАЩЕНИЯ:'))
             for item in detected['cw_abbreviations']:
-                lines.append(f"   • {item['code']} — {_(item['meaning'])}")
+                lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
 
         # Служебные сигналы
         if detected['service_signals']:
             lines.append(_('\n🚨 СЛУЖЕБНЫЕ СИГНАЛЫ:'))
             for item in detected['service_signals']:
                 lines.append(f"   • {item['signal']} — {_(item['meaning'])}")
+
+        for field, heading in (
+            ('arrl_qn_codes', '\n📻 ARRL QN-СИГНАЛЫ:'),
+            ('ru_z_codes', '\n🇷🇺 СОВЕТСКИЕ З-КОДЫ:'),
+            ('soviet_urgency_levels', '\n⚠️ СОВЕТСКИЕ КАТЕГОРИИ СРОЧНОСТИ:'),
+        ):
+            if detected.get(field):
+                lines.append(_(heading))
+                for item in detected[field]:
+                    lines.append(f"   • {item['code']}{'?' if item.get('is_question') else ''} — {_(item['meaning'])}")
+        if detected.get('rst_reports'):
+            lines.append('\n📈 RST:')
+            for item in detected['rst_reports']:
+                lines.append(f"   • RST {item['value']} (R={item['readability']}, "
+                             f"S={item['strength']}, T={item['tone']})")
 
         # Итог
         total_codes = (
@@ -666,7 +824,10 @@ class ProceduralCodeDetector:
             len(detected['cw_abbreviations']) + 
             len(detected['prosigns'])
         )
-        if total_codes == 0:
+        total_codes += sum(len(detected.get(field, [])) for field in
+                           ('arrl_qn_codes', 'ru_z_codes', 'soviet_urgency_levels',
+                            'rst_reports', 'service_signals'))
+        if total_codes == 0 and not detected.get('urgency_level'):
             lines.append(_('\n💬 Обычное сообщение без специальных кодов'))
 
         lines.append('\n' + '=' * 70)

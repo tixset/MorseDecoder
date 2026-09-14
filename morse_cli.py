@@ -307,6 +307,7 @@ def cmd_multi(args):
         # Анализируем коды
         detector = ProceduralCodeDetector()
         codes = detector.detect_codes(text)
+        print(detector.format_analysis(codes, language=get_console_language()))
         
         callsigns = codes.get('callsigns', [])
         q_codes = codes.get('q_codes', [])
@@ -494,6 +495,7 @@ def cmd_multi(args):
             # Анализируем коды для каждого сигнала
             detector = ProceduralCodeDetector()
             codes = detector.detect_codes(result['text'])
+            f.write(detector.format_analysis(codes, language='ru') + '\n')
             
             callsigns = codes.get('callsigns', [])
             q_codes = codes.get('q_codes', [])
@@ -676,7 +678,7 @@ def cmd_decode(args):
     )
     
     # Обработка файла
-    text_en, text_ru, stats = decoder.process_file(args.file, analyze_procedural=True, verbose=True)
+    text_en, text_ru, stats = decoder.process_file(args.file, analyze_procedural=False, verbose=True)
     if stats.get('error'):
         return 1
     
@@ -689,18 +691,11 @@ def cmd_decode(args):
         print(_('   🇬🇧 Английский: {0:.1f}%', quality_en))
         print(_('   🇷🇺 Русский:    {0:.1f}%', quality_ru))
         
-    # Анализ процедурных кодов если запрошен
-    if hasattr(args, 'analyze') and args.analyze:
-        detector = ProceduralCodeDetector()
-        best_text = text_en if len(text_en) >= len(text_ru) else text_ru
-        codes = detector.detect_codes(best_text)
-        
-        print(_('\n🔍 Обнаружено:'))
-        print(_('   📡 Позывные:      {0}', len(codes.get('callsigns', []))))
-        print(_('   📟 Q-коды:        {0}', len(codes.get('q_codes', []))))
-        print(f"   🔤 Prosigns:      {len(codes.get('prosigns', []))}")
-        print(_('   📝 CW-сокращения: {0}', len(codes.get('cw_abbreviations', []))))
-    
+    # The decoder prints audio diagnostics; the CLI owns the single code report.
+    # --analyze remains accepted for compatibility with existing commands.
+    detector = ProceduralCodeDetector()
+    print(detector.format_bilingual_analysis(text_en, text_ru, language=get_console_language()))
+
     print(_('\n✅ Декодирование завершено'))
     return 0
 
@@ -783,7 +778,7 @@ def cmd_experiment(args):
             len(detected_codes.get('q_codes', [])) +
             len(detected_codes.get('z_codes', [])) +
             len(detected_codes.get('shch_codes', [])) +
-            len(detected_codes.get('RU_PROCEDURAL_ABBR', [])) +
+            len(detected_codes.get('ru_procedural_abbr', [])) +
             len(detected_codes.get('cw_abbreviations', [])) +
             len(detected_codes.get('prosigns', [])) +
             len(detected_codes.get('callsigns', []))
@@ -881,8 +876,8 @@ def cmd_experiment(args):
                 ps_list = ps_items[:5]
             print(f"    🔔 Prosigns: {', '.join(ps_list)}")
         
-        if codes.get('RU_PROCEDURAL_ABBR'):
-            ru_items = codes['RU_PROCEDURAL_ABBR']
+        if codes.get('ru_procedural_abbr'):
+            ru_items = codes['ru_procedural_abbr']
             if ru_items and isinstance(ru_items[0], dict):
                 ru_list = [item['code'] for item in ru_items[:5]]
             else:
@@ -944,7 +939,7 @@ def _main(argv):
     parser_decode.add_argument('file', help=_('Путь к аудиофайлу (WAV, MP3, OGG)'))
     parser_decode.add_argument('--config', '-c', help=_('Путь к .config.json (по умолчанию: рядом с файлом)'))
     parser_decode.add_argument('--analyze', '-a', action='store_true',
-                              help=_('Провести анализ процедурных кодов'))
+                              help=_('Совместимость: анализ кодов уже включён по умолчанию'))
     parser_decode.add_argument('--lookup-callsigns', '--lookup', action='store_true',
                               help=_('Искать информацию о найденных позывных через API'))
     parser_decode.set_defaults(func=cmd_decode)

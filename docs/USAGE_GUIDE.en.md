@@ -41,7 +41,7 @@ python morse_cli.py decode recording.wav --config custom.config.json
 
 Runtime depends on recording length and hardware. Start with `fast`. `decode` requires `recording.config.json` beside the audio or an explicit configuration path. The saved `parameters` section contains `auto_frequency`, `pulse_percentile`, `gap_percentile_dot_dash`, `gap_percentile_char`, and `gap_percentile_word`. Reliable timing uses Morse ratios 1:3:7; legacy separation thresholds provide a fallback.
 
-`--analyze` belongs only to `decode` and adds counts of callsigns, Q codes, prosigns, and CW abbreviations. `auto` already analyzes codes without it. For Russian procedural abbreviations, use the [Python API example](SUPPORTED_CODES.en.md): `--ru` does not force Russian analysis in the CLI.
+`--analyze` belongs only to `decode` and remains for compatibility: full code analysis is already enabled by default, with no redundant summary. `auto` already analyzes codes without it. `decode` prints one combined EN/RU analysis, including Russian abbreviations; `auto`/`batch` save both analyses in TXT. The [Python API](SUPPORTED_CODES.en.md) can restrict categories by service profile.
 
 ## 📁 Batch processing and experiments
 

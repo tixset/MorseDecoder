@@ -10,6 +10,18 @@ This is a translation of the release history. Performance figures, file sizes, a
 
 ## [Unreleased]
 
+- Removed duplicate blocks in `decode --analyze`: one EN/RU report, shared structure shown once, and no repeated Russian codes from the legacy dictionary.
+
+
+### Extended procedural codes
+
+- Added 26 QN signals and 4 Cyrillic Z codes; expanded to 169 Russian abbreviations, 22 Shch codes, and 55 CW abbreviations.
+- Added service profiles, code provenance and system metadata, question forms, multiword signals, Soviet priority categories, and explicit RST reports.
+- Added joined SOS/CL; corrected the INT override of F/Ф and the Э mapping.
+- Included complete EN/RU analyses in decode and auto/batch TXT reports; expanded multi output.
+- Merged the extended reference into both docs/SUPPORTED_CODES languages, preserving emoji, examples, sources, and existing categories.
+
+
 ### Added and changed
 
 - English CLI by default, with `--ru` before/after the subcommand; Russian messages retained.

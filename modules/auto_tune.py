@@ -544,6 +544,15 @@ def save_results(audio_filepath, result, params, lookup_callsigns=False):
     print(_('\n💾 Расшифровка сохранена: {0}', txt_path))
     
     # Сохранение конфига параметров в .json
+    # Include every code family for both interpretations in the saved report.
+    detector = ProceduralCodeDetector()
+    with open(txt_path, 'a', encoding='utf-8') as report:
+        for alphabet in ('en', 'ru'):
+            report.write('\n' + alphabet.upper() + ':\n')
+            report.write(detector.format_analysis(
+                detector.detect_codes(result['text_' + alphabet]), language='ru'))
+            report.write('\n')
+
     config_path = base_path.with_suffix('.config.json')
     config = {
         'audio_file': audio_path.name,

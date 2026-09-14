@@ -46,7 +46,8 @@ PROSIGNS_MORSE = {
     '.-...'  : '<AS>',   # Ожидайте (A+S)
     '........': '<HH>',  # Ошибка (8 точек)
     '...-.'  : '<SN>',   # Понял (S+N)
-    '..-.'   : '<INT>',  # Вопрос (не путать с F)
+    '...---...': '<SOS>',  # Слитный сигнал бедствия
+    '-.-..-..': '<CL>',  # Слитное окончание работы станции
 }
 
 # Словарь Морзе для английского языка
@@ -74,7 +75,7 @@ MORSE_CODE_DICT_RU = {
     '-.-': 'К', '.-..': 'Л', '--': 'М', '-.': 'Н', '---': 'О',
     '.--.': 'П', '.-.': 'Р', '...': 'С', '-': 'Т', '..-': 'У',
     '..-.': 'Ф', '....': 'Х', '-.-.': 'Ц', '---.': 'Ч', '----': 'Ш',
-    '--.-': 'Щ', '-.--': 'Ы', '-..-': 'Ь', '..-.': 'Э', '..--': 'Ю',
+    '--.-': 'Щ', '-.--': 'Ы', '-..-': 'Ь', '..-..': 'Э', '..--': 'Ю',
     '.-.-': 'Я',
     '-----': '0', '.----': '1', '..---': '2', '...--': '3',
     '....-': '4', '.....': '5', '-....': '6', '--...': '7',
@@ -461,22 +462,14 @@ class MorseDecoder:
                 detected_en = detector.detect_codes(text_en)
                 detected_ru = detector.detect_codes(text_ru)
                 
-                # Выбираем более релевантный анализ
-                total_codes_en = (len(detected_en['q_codes']) + 
-                                 len(detected_en['z_codes']) + 
-                                 len(detected_en['cw_abbreviations']))
-                total_codes_ru = (len(detected_ru['q_codes']) + 
-                                 len(detected_ru['z_codes']) + 
-                                 len(detected_ru['cw_abbreviations']))
-                
-                if total_codes_en > 0 or total_codes_ru > 0:
-                    # Показываем анализ для варианта с большим количеством кодов
-                    if verbose:
-                        if total_codes_en >= total_codes_ru:
-                            print(detector.format_analysis(detected_en, language=get_console_language()))
-                        else:
-                            print(detector.format_analysis(detected_ru, language=get_console_language()))
-            
+                # Both alphabets are interpretations of the same audio.
+                # Keep their reports separate instead of discarding Russian codes.
+                if verbose:
+                    print('\nEN:')
+                    print(detector.format_analysis(detected_en, language=get_console_language()))
+                    print('\nRU:')
+                    print(detector.format_analysis(detected_ru, language=get_console_language()))
+
             # Вычисление статистики
             duration = len(audio) / sample_rate
             timing = estimate_timing(pulses)

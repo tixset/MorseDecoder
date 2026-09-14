@@ -89,7 +89,7 @@ CLI messages are English by default. `--ru` works before or after the subcommand
 
 The decoder handles CW. PSK31/RTTY classification in the analyzer does not mean those modulations can be decoded. Noise, frequency drift, overlapping signals, and unusual timing can cause errors. A larger parameter search does not guarantee improvement.
 
-`auto --analyze` is unsupported: `auto` already includes code analysis; the extra flag belongs to `decode`. Russian abbreviations are available through the Python API, but the CLI has no switch that forces their complete listing. See the [code reference](docs/SUPPORTED_CODES.en.md) for an example.
+`auto --analyze` is unsupported: `auto` already includes code analysis; the extra flag belongs to `decode`. Russian abbreviations are available through the Python API; `decode` prints complete analyses of both alphabets, and `auto` saves them in TXT. See the [code reference](docs/SUPPORTED_CODES.en.md) for an example.
 
 ## 💻 More CLI examples
 
@@ -178,21 +178,21 @@ The [reference recording](tests/fixtures/noisy_cw.mp3) has a user-provided [Mors
 
 ## 🔤 Supported symbols and codes
 
-The tables contain Latin and Russian letters, digits 0–9, and punctuation. EN lists `. , ? ' ! / ( ) & : ; = + - _ " $ @`; RU lists `. , ? ' ! / ( ) : ; =`. This describes table contents, not unambiguous output: prosigns are checked first. For example, `.-.-.` renders as `<AR>` rather than `+`; current F/Ф/Э ambiguities are explained in the [reference](docs/SUPPORTED_CODES.en.md).
+The tables contain Latin and Russian letters, digits 0–9, and punctuation. EN lists `. , ? ' ! / ( ) & : ; = + - _ " $ @`; RU lists `. , ? ' ! / ( ) : ; =`. This describes table contents, not unambiguous output: prosigns are checked first. For example, `.-.-.` renders as `<AR>` rather than `+`; F/Ф/Э mappings are explained in the [reference](docs/SUPPORTED_CODES.en.md).
 
 | Category | Entries | Examples |
 | --- | ---: | --- |
 | Q codes | 53 | `QSL`: acknowledge reception; `QTH`: location; `QRZ`: who is calling |
 | Z codes | 33 | `ZAA`: radio discipline; `ZAG`: interrupt transmission |
 | Y codes | 26 | `YAA`, `YBB` |
-| Shch codes | 3 | `ЩРТ`, `ЩРЩ`, `ЩСА` |
-| CW abbreviations | 25 | `RPT`: repeat; `DE`: from; `CQ`: general call |
-| Prosigns | 11 | `<AR>`, `<SK>`, `<BT>`, `<HH>`; some names are aliases |
-| Russian abbreviations | 7 | `РПТ`: repeat; `АЛ`: all just transmitted |
+| Shch codes | 22 | `ЩРТ`, `ЩРЩ`, `ЩСА` |
+| CW abbreviations | 55 | `RPT`: repeat; `DE`: from; `CQ`: general call |
+| Prosigns | 15 | `<AR>`, `<SK>`, `<BT>`, `<HH>`; some names are aliases |
+| Russian abbreviations | 169 | `РПТ`: repeat; `АЛ`: all just transmitted |
 | Maritime / weather codes | 18 / 9 | `NC`, `WX` |
 | Soviet codes / SINPO | 12 / 5 | Separate dictionary categories |
 
-`code_dictionaries.py` contains 18 dictionaries, including callsign helpers, phonetic alphabets, and RST. Not every dictionary is an automatic detection category; meanings reflect project data and require context. See [SUPPORTED_CODES.en.md](docs/SUPPORTED_CODES.en.md) for the complete inventory.
+`code_dictionaries.py` contains 21 distinct dictionaries (plus the compatible SOVIET_CODES_LEGACY alias), including callsign helpers, phonetic alphabets, and RST. Not every dictionary is an automatic detection category; meanings reflect project data and require context. See [SUPPORTED_CODES.en.md](docs/SUPPORTED_CODES.en.md) for the complete inventory.
 
 ## 🏗️ Project structure
 
